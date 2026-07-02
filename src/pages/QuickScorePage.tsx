@@ -1,4 +1,4 @@
-import { AlertCircle, Copy, Minus, Plus, RotateCcw, Share2, SlidersHorizontal, Sparkles, Trash2 } from 'lucide-react';
+import { AlertCircle, Camera, Copy, Minus, Plus, RotateCcw, Share2, SlidersHorizontal, Sparkles, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
 import {
@@ -273,6 +273,11 @@ export function QuickScorePage() {
     setConditions((value) => ({ ...value, [key]: !value[key] }));
   };
 
+  const openHandRecognition = () => {
+    window.location.hash = '#/hand-recognition';
+    window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'smooth' }));
+  };
+
   const resultText = makeResultText(computation);
   const noYakuWarnings = computation.kind === 'score' && !computation.result.valid ? computation.result.warnings : [];
   const invalidErrors = computation.kind === 'invalid' ? computation.errors : [];
@@ -389,6 +394,18 @@ export function QuickScorePage() {
           </div>
         ) : null}
       </section>
+
+      <div className="mj-quick-scan-entry">
+        <ActionButton
+          className="mj-quick-scan-action"
+          fullWidth
+          icon={<Camera aria-hidden="true" />}
+          variant="ghost"
+          onClick={openHandRecognition}
+        >
+          拍照识别手牌
+        </ActionButton>
+      </div>
 
       <section className="mj-design-card">
         <header className="mj-design-card__header">

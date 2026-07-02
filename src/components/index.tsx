@@ -564,6 +564,7 @@ export interface TileStripProps extends HTMLAttributes<HTMLDivElement> {
   maxSlots?: number;
   highlightLast?: boolean;
   highlightIndex?: number | null;
+  selectionMarker?: ReactNode;
   onTileClick?: (index: number) => void;
   tileActionLabel?: (index: number, tileLabel: string) => string;
   onRemove?: (index: number) => void;
@@ -577,6 +578,7 @@ export function TileStrip({
   maxSlots,
   highlightLast = false,
   highlightIndex,
+  selectionMarker = '和',
   onTileClick,
   tileActionLabel,
   onRemove,
@@ -608,7 +610,7 @@ export function TileStrip({
               }
               className={isSelected ? 'mj-tile--winning' : undefined}
               code={tile}
-              marker={isSelected ? '和' : undefined}
+              marker={isSelected ? selectionMarker : undefined}
               onClick={handleTileClick ? () => handleTileClick(index) : undefined}
               selected={isSelected}
               size={tileSize}

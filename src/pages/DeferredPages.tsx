@@ -44,6 +44,7 @@ import { formatPoints } from './shared';
 
 const CHAT_SAMPLE_HAND = ['m2', 'm3', 'm4', 'p3', 'p4', 'p5r', 's6', 's7', 's8', 'z1', 'z1', 'z7'];
 const SEAT_IDS = ['east', 'south', 'west', 'north'] as const;
+const RECOGNITION_SAMPLE_HAND: TileCode[] = ['m2', 'm3', 'm4', 'p2', 'p3', 'p4', 'p5', 's6', 's7', 's8', 'z1', 'z1', 'z2', 'z3'];
 type SeatId = (typeof SEAT_IDS)[number];
 type RecordOutcome = 'ron' | 'tsumo' | 'draw' | 'adjust';
 
@@ -98,6 +99,37 @@ function hasFourPhysicalCopies(tile: string, currentTiles: string[]) {
   if (!isTileCode(tile)) return true;
   const base = baseTileCode(tile);
   return currentTiles.filter((value) => isTileCode(value) && baseTileCode(value) === base).length >= 4;
+}
+
+function nearbyTileCandidates(tile: TileCode, index: number): TileCode[] {
+  const base = baseTileCode(tile);
+  const suit = base[0];
+  const rank = Number(base[1]);
+  const candidates: TileCode[] = [];
+  const pushCandidate = (value: string) => {
+    if (isTileCode(value) && !candidates.includes(value)) candidates.push(value);
+  };
+
+  pushCandidate(tile);
+
+  if (suit === 'z') {
+    pushCandidate(`z${Math.max(1, rank - 1)}`);
+    pushCandidate(`z${Math.min(7, rank + 1)}`);
+  } else {
+    pushCandidate(`${suit}${Math.min(9, rank + 1)}`);
+    pushCandidate(`${suit}${Math.max(1, rank - 1)}`);
+  }
+
+  for (let offset = 0; offset < ALL_TILE_CODES.length; offset += 1) {
+    if (candidates.length >= 3) break;
+    pushCandidate(ALL_TILE_CODES[(index + offset) % ALL_TILE_CODES.length]);
+  }
+
+  return candidates.slice(0, 3);
+}
+
+function makeRecognitionCandidates() {
+  return RECOGNITION_SAMPLE_HAND.map((tile, index) => nearbyTileCandidates(tile, index));
 }
 
 function formatPaymentSummary(params: {
@@ -557,6 +589,8 @@ export function TableRecordsPage() {
 export function HandRecognitionPage() {
   const [imageDataUrl, setImageDataUrl] = useState('');
   const [tiles, setTiles] = useState<TileCode[]>([]);
+  const [recognitionCandidates, setRecognitionCandidates] = useState<TileCode[][]>([]);
+  const [selectedRecognitionIndex, setSelectedRecognitionIndex] = useState<number | null>(null);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
   const [message, setMessage] = useState('');
 
@@ -564,10 +598,28 @@ export function HandRecognitionPage() {
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
+      const candidates = makeRecognitionCandidates();
       setImageDataUrl(String(reader.result ?? ''));
+      setRecognitionCandidates(candidates);
+      setSelectedRecognitionIndex(null);
+      setTiles(candidates.map((group) => group[0]));
       setMessage('图片已载入，请用牌键盘确认最终牌序');
     };
     reader.readAsDataURL(file);
+  };
+
+  const selectedCandidateTiles =
+    selectedRecognitionIndex === null ? [] : (recognitionCandidates[selectedRecognitionIndex] ?? []);
+
+  const chooseRecognitionCandidate = (tile: TileCode) => {
+    if (selectedRecognitionIndex === null) return;
+    setTiles((value) => value.map((currentTile, index) => (index === selectedRecognitionIndex ? tile : currentTile)));
+  };
+
+  const isCandidateDisabled = (candidate: TileCode) => {
+    if (selectedRecognitionIndex === null) return true;
+    const candidateBase = baseTileCode(candidate);
+    return tiles.filter((tile, index) => index !== selectedRecognitionIndex && baseTileCode(tile) === candidateBase).length >= 4;
   };
 
   const copyTiles = () => {
@@ -598,11 +650,28 @@ export function HandRecognitionPage() {
       </SectionCard>
 
       <SectionCard className="mj-recognition-result-card" title="最终牌序">
+        {selectedCandidateTiles.length > 0 ? (
+          <div aria-label="识别候选牌" className="mj-recognition-candidates">
+            {selectedCandidateTiles.map((tile) => (
+              <MahjongTile
+                key={tile}
+                code={tile}
+                disabled={isCandidateDisabled(tile)}
+                selected={tiles[selectedRecognitionIndex ?? -1] === tile}
+                size="lg"
+                onClick={() => chooseRecognitionCandidate(tile)}
+              />
+            ))}
+          </div>
+        ) : null}
         <TileStrip
-          emptyLabel="尚未确认牌序"
+          emptyLabel={null}
+          highlightIndex={selectedRecognitionIndex}
           maxSlots={14}
+          selectionMarker={null}
           tileSize="xs"
           tiles={tiles}
+          onTileClick={recognitionCandidates.length > 0 ? setSelectedRecognitionIndex : undefined}
           onRemove={(index) => setTiles(tiles.filter((_, currentIndex) => currentIndex !== index))}
         />
         <ActionButton fullWidth icon={<Keyboard aria-hidden="true" />} onClick={() => setKeyboardOpen(true)}>

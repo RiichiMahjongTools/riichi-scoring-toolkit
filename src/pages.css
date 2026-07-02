@@ -251,6 +251,25 @@
   color: var(--mj-green);
 }
 
+.mj-quick-scan-entry {
+  display: grid;
+}
+
+.mj-quick-scan-action.mj-action-button {
+  min-height: 48px;
+  border-color: color-mix(in srgb, var(--mj-green) 22%, var(--mj-line));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--mj-green-soft) 70%, var(--mj-surface));
+  color: var(--mj-green);
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.mj-quick-scan-action .mj-action-button__icon svg {
+  width: 19px;
+  height: 19px;
+}
+
 .mj-dora-compact,
 .mj-meld-editor {
   display: grid;
@@ -2447,8 +2466,32 @@
   padding-top: 8px;
 }
 
+.mj-recognition-candidates {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  min-height: 72px;
+  padding: 0 0 8px;
+}
+
+.mj-recognition-candidates .mj-tile {
+  flex: 0 0 auto;
+}
+
 .mj-recognition-result-card .mj-tile-strip__row {
+  display: grid;
+  grid-template-columns: repeat(14, minmax(0, 1fr));
+  justify-items: center;
   gap: 3px;
+  min-height: 34px;
+  overflow: visible;
+  padding: 6px 0;
+  scrollbar-width: none;
+}
+
+.mj-recognition-result-card .mj-tile-strip__row::-webkit-scrollbar {
+  display: none;
 }
 
 .mj-scan-frame {
