@@ -149,7 +149,7 @@ export function ChatScorePage() {
           </div>
           <div className="mj-chat-bubble mj-chat-bubble--user mj-chat-bubble--tiles">
             <strong>二三四万 345筒 678索 东东中</strong>
-            <TileStrip tileSize="sm" tiles={CHAT_SAMPLE_HAND} />
+            <TileStrip tileSize="xs" tiles={CHAT_SAMPLE_HAND} />
           </div>
           <div className="mj-chat-bubble mj-chat-bubble--assistant">
             请选择和牌方式，并确认场风/自风。
@@ -601,7 +601,7 @@ export function HandRecognitionPage() {
         <TileStrip
           emptyLabel="尚未确认牌序"
           maxSlots={14}
-          tileSize="sm"
+          tileSize="xs"
           tiles={tiles}
           onRemove={(index) => setTiles(tiles.filter((_, currentIndex) => currentIndex !== index))}
         />
@@ -659,7 +659,7 @@ export function TileKeyboardDemoPage() {
         <TileStrip
           emptyLabel="点击下方牌面输入"
           maxSlots={14}
-          tileSize="sm"
+          tileSize="xs"
           tiles={tiles}
           onRemove={(index) => setTiles(tiles.filter((_, currentIndex) => currentIndex !== index))}
         />
@@ -692,7 +692,7 @@ export function TileKeyboardDemoPage() {
                 count={count > 0 ? count : undefined}
                 disabled={tiles.length >= 14 || count >= 4}
                 selected={count > 0}
-                size="lg"
+                size="xl"
                 onClick={() => addTile(tile)}
               />
             );

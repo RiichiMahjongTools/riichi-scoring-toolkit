@@ -1,4 +1,4 @@
-import { AlertCircle, BookOpen, Calculator, Check, Eye, Sparkles, X } from 'lucide-react';
+import { AlertCircle, BookOpen, Calculator, Check, Eye, Shuffle, Sparkles, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
 import {
@@ -13,6 +13,10 @@ import {
 } from '../components';
 import {
   FU_PRACTICE_OPTIONS,
+  CHINITU_WAIT_QUESTION_COUNT,
+  COMEBACK_PRACTICE_QUESTION_COUNT,
+  FU_PRACTICE_QUESTION_COUNT,
+  POINT_PRACTICE_QUESTION_COUNT,
   buildHanFuTableRow,
   checkChinituWaitAnswer,
   checkComebackPracticeAnswer,
@@ -72,6 +76,35 @@ function nextPracticeSeed(
   setSeed((value) => value + 1);
 }
 
+function randomPracticeSeed(
+  setSeed: (updater: (value: number) => number) => void,
+  reset: () => void,
+  questionCount: number,
+) {
+  reset();
+  setSeed((value) => {
+    if (questionCount <= 1) return value + 1;
+
+    const currentIndex = ((value % questionCount) + questionCount) % questionCount;
+    let nextIndex = Math.floor(Math.random() * (questionCount - 1));
+    if (nextIndex >= currentIndex) nextIndex += 1;
+
+    const currentCycleStart = value - currentIndex;
+    const nextSeed = currentCycleStart + nextIndex;
+    return nextSeed > value ? nextSeed : nextSeed + questionCount;
+  });
+}
+
+function RandomQuestionButton({ onClick }: { onClick: () => void }) {
+  return (
+    <div className="mj-practice-random-action">
+      <ActionButton fullWidth icon={<Shuffle aria-hidden="true" />} variant="ghost" onClick={onClick}>
+        随机换一题
+      </ActionButton>
+    </div>
+  );
+}
+
 function FeedbackBreakdown({ lines }: { lines: readonly string[] }) {
   return (
     <ul className="mj-practice-breakdown-list">
@@ -102,6 +135,13 @@ export function ChinitsuPracticePage() {
     setStreak((value) => (result.correct ? value + 1 : 0));
   };
 
+  const resetQuestion = () => {
+    setSelectedRanks([]);
+    setFeedback(null);
+  };
+
+  const randomQuestion = () => randomPracticeSeed(setSeed, resetQuestion, CHINITU_WAIT_QUESTION_COUNT);
+
   const correctAnswerTiles = (feedback?.correctAnswer ?? question.correctWaits).map((rank) => `${question.suit}${rank}`);
   const userAnswerTiles = (feedback?.userAnswer ?? selectedRanks).map((rank) => `${question.suit}${rank}`);
 
@@ -116,7 +156,7 @@ export function ChinitsuPracticePage() {
       />
 
       <SectionCard className="mj-practice-hand-card mj-chinitsu-hand-card" title="清一色手牌">
-        <TileStrip tileSize="sm" tiles={question.handTiles.map((tile) => tile.code)} />
+        <TileStrip tileSize="xs" tiles={question.handTiles.map((tile) => tile.code)} />
       </SectionCard>
 
       {feedback ? (
@@ -174,10 +214,7 @@ export function ChinitsuPracticePage() {
       </SectionCard>
 
       {feedback ? (
-        <ActionButton fullWidth icon={<Sparkles aria-hidden="true" />} onClick={() => nextPracticeSeed(setSeed, () => {
-          setSelectedRanks([]);
-          setFeedback(null);
-        })}>
+        <ActionButton fullWidth icon={<Sparkles aria-hidden="true" />} onClick={() => nextPracticeSeed(setSeed, resetQuestion)}>
           下一题
         </ActionButton>
       ) : (
@@ -185,6 +222,7 @@ export function ChinitsuPracticePage() {
           提交答案
         </ActionButton>
       )}
+      <RandomQuestionButton onClick={randomQuestion} />
     </div>
   );
 }
@@ -208,6 +246,13 @@ export function FuPracticePage() {
     setStreak((value) => (result.correct ? value + 1 : 0));
   };
 
+  const resetQuestion = () => {
+    setAnswerFu(null);
+    setFeedback(null);
+  };
+
+  const randomQuestion = () => randomPracticeSeed(setSeed, resetQuestion, FU_PRACTICE_QUESTION_COUNT);
+
   return (
     <div className="mj-page-stack mj-practice-design mj-fu-practice-page">
       <PracticeStats
@@ -219,7 +264,7 @@ export function FuPracticePage() {
       />
 
       <SectionCard className="mj-practice-hand-card" title="题面手牌">
-        <TileStrip highlightLast tileSize="sm" tiles={question.handTiles.map((tile) => tile.code)} />
+        <TileStrip highlightLast tileSize="xs" tiles={question.handTiles.map((tile) => tile.code)} />
         <div className="mj-practice-hand-meta">
           <Chip selected>{formatWinMethod(question.winMethod)}</Chip>
           <Chip selected>场风{WIND_LABELS[question.roundWind]}</Chip>
@@ -276,15 +321,13 @@ export function FuPracticePage() {
             }}>
               符数帮助
             </ActionButton>
-            <ActionButton icon={<Sparkles aria-hidden="true" />} onClick={() => nextPracticeSeed(setSeed, () => {
-              setAnswerFu(null);
-              setFeedback(null);
-            })}>
+            <ActionButton icon={<Sparkles aria-hidden="true" />} onClick={() => nextPracticeSeed(setSeed, resetQuestion)}>
               下一题
             </ActionButton>
           </div>
         </section>
       ) : null}
+      <RandomQuestionButton onClick={randomQuestion} />
     </div>
   );
 }
@@ -302,32 +345,44 @@ function makePointLookupRows(han: number) {
   });
 }
 
-function isOpenPointGroup(group: PointPracticeHandGroup): boolean {
-  return group.kind === 'chi' || group.kind === 'pon' || group.kind === 'openKan';
+function isMeldPointGroup(group: PointPracticeHandGroup): boolean {
+  return group.kind === 'chi' || group.kind === 'pon' || group.kind === 'openKan' || group.kind === 'closedKan';
 }
 
-function pointWinningTile(question: PointPracticeQuestion): string | null {
-  for (const group of question.handGroups) {
-    if (group.winningIndex !== undefined) return group.tiles[group.winningIndex] ?? null;
-  }
-  return null;
+function pointTileOrder(code: string): number {
+  const suit = code[0] ?? '';
+  const rank = Number(code.slice(1)) || 0;
+  const suitOrder: Record<string, number> = { m: 0, p: 1, s: 2, z: 3 };
+  return (suitOrder[suit] ?? 9) * 10 + rank;
 }
 
 function PointPracticeTile({
   code,
   back = false,
   sideways = false,
+  floatingWinCode,
 }: {
   code?: string;
   back?: boolean;
   sideways?: boolean;
+  floatingWinCode?: string;
 }) {
+  const className = [
+    'mj-point-hand-tile-slot',
+    sideways && 'mj-point-hand-tile-slot--sideways',
+  ].filter(Boolean).join(' ');
+
   return (
-    <span className={sideways ? 'mj-point-hand-tile-slot mj-point-hand-tile-slot--sideways' : 'mj-point-hand-tile-slot'}>
+    <span className={className}>
       {back ? (
-        <span aria-label="牌背" className="mj-tile mj-tile--sm mj-point-hand-tile-back" />
+        <span aria-label="牌背" className="mj-tile mj-tile--xs mj-point-hand-tile-back" />
       ) : code ? (
-        <MahjongTile className={sideways ? 'mj-point-hand-tile--sideways' : undefined} code={code} size="sm" />
+        <MahjongTile className={sideways ? 'mj-point-hand-tile--sideways' : undefined} code={code} size="xs" />
+      ) : null}
+      {floatingWinCode ? (
+        <span className="mj-point-hand-floating-win" aria-label="和牌">
+          <MahjongTile className="mj-point-hand-tile--floating-win" code={floatingWinCode} size="xs" />
+        </span>
       ) : null}
     </span>
   );
@@ -336,16 +391,11 @@ function PointPracticeTile({
 function PointPracticeHandMeld({
   group,
   groupIndex,
-  winMethod,
 }: {
   group: PointPracticeHandGroup;
   groupIndex: number;
-  winMethod: PointPracticeQuestion['winMethod'];
 }) {
-  const isOpen = isOpenPointGroup(group);
-  const visibleTiles = group.tiles
-    .map((tile, tileIndex) => ({ tile, tileIndex }))
-    .filter(({ tileIndex }) => !(winMethod === 'tsumo' && tileIndex === group.winningIndex));
+  const isOpen = isMeldPointGroup(group);
 
   return (
     <div
@@ -358,8 +408,8 @@ function PointPracticeHandMeld({
       ].filter(Boolean).join(' ')}
     >
       <div className="mj-point-hand-meld__tiles">
-        {visibleTiles.map(({ tile, tileIndex }) => {
-          const isSideways = (winMethod === 'ron' && tileIndex === group.winningIndex) || tileIndex === group.calledIndex;
+        {group.tiles.map((tile, tileIndex) => {
+          const isSideways = tileIndex === group.calledIndex;
           const isBack = group.backIndexes?.includes(tileIndex) ?? false;
           return (
             <PointPracticeTile
@@ -376,31 +426,42 @@ function PointPracticeHandMeld({
 }
 
 function PointPracticeHandScene({ question }: { question: PointPracticeQuestion }) {
-  const winningTile = pointWinningTile(question);
-  const concealedGroups = question.handGroups.filter((group) => !isOpenPointGroup(group));
-  const openGroups = question.handGroups.filter(isOpenPointGroup);
+  const handEntries = question.handGroups
+    .filter((group) => !isMeldPointGroup(group))
+    .flatMap((group, groupIndex) =>
+      group.tiles.map((tile, tileIndex) => ({
+        tile,
+        groupIndex,
+        tileIndex,
+        isWinning: tileIndex === group.winningIndex,
+        isBack: group.backIndexes?.includes(tileIndex) ?? false,
+      })),
+    );
+  const winningEntry = handEntries.find((entry) => entry.isWinning);
+  const handTiles = handEntries
+    .filter((entry) => !entry.isWinning)
+    .sort((left, right) => pointTileOrder(left.tile) - pointTileOrder(right.tile));
+  const floatingWinAnchorIndex = winningEntry ? Math.max(0, handTiles.length - 2) : -1;
+  const meldGroups = question.handGroups.filter(isMeldPointGroup);
 
   return (
     <div className="mj-point-hand-scene" aria-label="题面牌姿">
-      {question.winMethod === 'tsumo' && winningTile ? (
-        <div className="mj-point-hand-scene__draw">
-          <PointPracticeTile code={winningTile} sideways />
-        </div>
-      ) : null}
-
-      <div className="mj-point-hand-scene__groups" aria-label="门前牌">
-        {concealedGroups.map((group, index) => (
-          <PointPracticeHandMeld key={`concealed-${index}`} group={group} groupIndex={index} winMethod={question.winMethod} />
+      <div className="mj-point-hand-scene__hand" aria-label="手牌">
+        {handTiles.map(({ tile, groupIndex, tileIndex, isBack }, index) => (
+          <PointPracticeTile
+            key={`hand-${groupIndex}-${tile}-${tileIndex}`}
+            code={tile}
+            back={isBack}
+            floatingWinCode={index === floatingWinAnchorIndex ? winningEntry?.tile : undefined}
+          />
         ))}
       </div>
 
-      {openGroups.length > 0 ? (
-        <div className="mj-point-hand-scene__open">
-          <div className="mj-point-hand-scene__groups mj-point-hand-scene__groups--open" aria-label="副露牌">
-            {openGroups.map((group, index) => (
-              <PointPracticeHandMeld key={`open-${index}`} group={group} groupIndex={concealedGroups.length + index} winMethod={question.winMethod} />
-            ))}
-          </div>
+      {meldGroups.length > 0 ? (
+        <div className="mj-point-hand-scene__melds" aria-label="副露与杠">
+          {meldGroups.map((group, index) => (
+            <PointPracticeHandMeld key={`meld-${index}`} group={group} groupIndex={index} />
+          ))}
         </div>
       ) : null}
     </div>
@@ -422,6 +483,13 @@ export function PointPracticePage() {
     setStreak((value) => (result.correct ? value + 1 : 0));
   };
 
+  const resetQuestion = () => {
+    setDraft('');
+    setFeedback(null);
+  };
+
+  const randomQuestion = () => randomPracticeSeed(setSeed, resetQuestion, POINT_PRACTICE_QUESTION_COUNT);
+
   return (
     <div className="mj-page-stack mj-practice-design mj-point-practice-page">
       <PracticeStats
@@ -435,7 +503,6 @@ export function PointPracticePage() {
       <SectionCard aria-label="题面手牌" className="mj-practice-hand-card mj-point-hand-card">
         <PointPracticeHandScene question={question} />
         <div className="mj-practice-hand-meta">
-          {question.noYaku ? <Chip selected tone="danger">无役</Chip> : <Chip selected>{question.han}番{question.fu}符</Chip>}
           <Chip selected>{question.seatWind === 'east' ? '亲家' : '闲家'}</Chip>
           <Chip selected>{formatWinMethod(question.winMethod)}</Chip>
           <Chip selected>{WIND_LABELS[question.roundWind]}场{WIND_LABELS[question.seatWind]}家</Chip>
@@ -458,12 +525,6 @@ export function PointPracticePage() {
           提交答案
         </ActionButton>
       </SectionCard>
-
-      {question.noYaku ? (
-        <Alert icon={<AlertCircle aria-hidden="true" />} tone="danger" title="无役题答案">
-          若题目没有役，正确答案为 0。
-        </Alert>
-      ) : null}
 
       <SectionCard className="mj-practice-lookup-card" title="番符点数表">
         <div className="mj-practice-lookup-toggle">
@@ -499,16 +560,14 @@ export function PointPracticePage() {
               }}>
                 点数帮助
               </ActionButton>
-              <ActionButton icon={<Sparkles aria-hidden="true" />} onClick={() => nextPracticeSeed(setSeed, () => {
-                setDraft('');
-                setFeedback(null);
-              })}>
+              <ActionButton icon={<Sparkles aria-hidden="true" />} onClick={() => nextPracticeSeed(setSeed, resetQuestion)}>
                 下一题
               </ActionButton>
             </div>
           }
         />
       ) : null}
+      <RandomQuestionButton onClick={randomQuestion} />
     </div>
   );
 }
@@ -527,10 +586,13 @@ export function ComebackPracticePage() {
     setStreak((value) => (result.correct ? value + 1 : 0));
   };
 
-  const nextQuestion = () => nextPracticeSeed(setSeed, () => {
+  const resetQuestion = () => {
     setAnswers({});
     setFeedback(null);
-  });
+  };
+
+  const nextQuestion = () => nextPracticeSeed(setSeed, resetQuestion);
+  const randomQuestion = () => randomPracticeSeed(setSeed, resetQuestion, COMEBACK_PRACTICE_QUESTION_COUNT);
 
   const selectAnswer = (han: number, option: FuValue | 'impossible') => {
     setFeedback(null);
@@ -541,8 +603,10 @@ export function ComebackPracticePage() {
     <div className="mj-page-stack mj-practice-design mj-comeback-practice-page">
       <section className="mj-comeback-sheet">
         <header className="mj-comeback-sheet__header">
-          <h2>作答</h2>
-          <span>{streak}连正</span>
+          <div>
+            <h2>作答</h2>
+            <span>{streak}连正</span>
+          </div>
         </header>
 
         <div className="mj-comeback-sheet__body">
@@ -626,6 +690,7 @@ export function ComebackPracticePage() {
           </ActionButton>
         </footer>
       </section>
+      <RandomQuestionButton onClick={randomQuestion} />
     </div>
   );
 }

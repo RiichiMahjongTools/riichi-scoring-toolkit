@@ -626,20 +626,23 @@
 }
 
 .mj-tile {
+  --mj-tile-width: 32px;
+  --mj-tile-height: 44px;
+  --mj-tile-radius: 6px;
+  --mj-tile-face-scale: 82%;
+  --mj-tile-rank-size: 22px;
+
   position: relative;
   display: inline-grid;
   place-items: center;
   flex: 0 0 auto;
-  width: 32px;
-  height: 44px;
+  width: var(--mj-tile-width);
+  height: var(--mj-tile-height);
   border: 1px solid color-mix(in srgb, var(--mj-line) 80%, #fff);
-  border-radius: 8px;
+  border-radius: var(--mj-tile-radius);
   color: var(--mj-green);
-  background:
-    linear-gradient(180deg, #fff 0%, #fbfaf6 62%, #efe5d5 100%);
-  box-shadow:
-    inset 0 -3px 0 color-mix(in srgb, var(--mj-line) 70%, transparent),
-    0 1px 3px rgb(0 0 0 / 10%);
+  background: #fff;
+  box-shadow: none;
   font-weight: 900;
   line-height: 1;
 }
@@ -648,16 +651,36 @@ button.mj-tile {
   padding: 0;
 }
 
+.mj-tile--xs {
+  --mj-tile-width: 20px;
+  --mj-tile-height: 30px;
+  --mj-tile-radius: 4px;
+  --mj-tile-face-scale: 80%;
+  --mj-tile-rank-size: 15px;
+}
+
 .mj-tile--sm {
-  width: 24px;
-  height: 34px;
-  border-radius: 7px;
+  --mj-tile-width: 24px;
+  --mj-tile-height: 34px;
+  --mj-tile-radius: 5px;
+  --mj-tile-face-scale: 80%;
+  --mj-tile-rank-size: 17px;
 }
 
 .mj-tile--lg {
-  width: 46px;
-  height: 64px;
-  border-radius: 9px;
+  --mj-tile-width: 46px;
+  --mj-tile-height: 64px;
+  --mj-tile-radius: 9px;
+  --mj-tile-face-scale: 84%;
+  --mj-tile-rank-size: 26px;
+}
+
+.mj-tile--xl {
+  --mj-tile-width: 58px;
+  --mj-tile-height: 78px;
+  --mj-tile-radius: 10px;
+  --mj-tile-face-scale: 84%;
+  --mj-tile-rank-size: 30px;
 }
 
 .mj-tile--p {
@@ -680,9 +703,8 @@ button.mj-tile {
 .mj-tile--selected,
 .mj-tile--winning {
   border-color: var(--mj-gold);
-  box-shadow:
-    inset 0 -3px 0 color-mix(in srgb, var(--mj-gold) 35%, transparent),
-    0 0 0 2px color-mix(in srgb, var(--mj-gold) 28%, transparent);
+  background: color-mix(in srgb, var(--mj-gold) 14%, #fff);
+  box-shadow: none;
 }
 
 .mj-tile--disabled {
@@ -699,25 +721,15 @@ button.mj-tile {
 
 .mj-tile--with-img {
   overflow: visible;
-  background: linear-gradient(180deg, #fff 0%, #fffdf8 56%, #efe4d4 100%);
+  background: #fff;
 }
 
 .mj-tile__face-img {
   display: block;
-  width: 82%;
-  height: 82%;
+  width: var(--mj-tile-face-scale);
+  height: var(--mj-tile-face-scale);
   object-fit: contain;
   pointer-events: none;
-}
-
-.mj-tile--sm .mj-tile__face-img {
-  width: 80%;
-  height: 80%;
-}
-
-.mj-tile--lg .mj-tile__face-img {
-  width: 84%;
-  height: 84%;
 }
 
 .mj-tile--with-img .mj-tile__rank,
@@ -733,15 +745,7 @@ button.mj-tile {
 
 .mj-tile__rank {
   font-family: 'Geist Mono', ui-monospace, monospace;
-  font-size: 22px;
-}
-
-.mj-tile--sm .mj-tile__rank {
-  font-size: 17px;
-}
-
-.mj-tile--lg .mj-tile__rank {
-  font-size: 26px;
+  font-size: var(--mj-tile-rank-size);
 }
 
 .mj-tile__suit {
@@ -902,11 +906,8 @@ button.mj-tile {
   display: none;
 }
 
-.mj-keyboard-preview-strip .mj-tile--sm {
+.mj-keyboard-preview-strip .mj-tile {
   justify-self: center;
-  width: min(100%, 20px);
-  height: 29px;
-  border-radius: 6px;
 }
 
 .mj-keyboard-preview-strip .mj-tile__marker {
@@ -1437,11 +1438,6 @@ button.mj-contact-panel__method {
   .mj-tile-keyboard__grid {
     gap: 8px 6px;
     padding: 8px;
-  }
-
-  .mj-tile--lg {
-    width: 46px;
-    height: 64px;
   }
 
   .mj-tile-keyboard__actions {

@@ -71,6 +71,8 @@ const CHINITU_FIXTURE_CODES: readonly TileCode[][] = [
   ['m2', 'm3', 'm3', 'm4', 'm4', 'm5', 'm5', 'm6', 'm6', 'm7', 'm7', 'm8', 'm8'],
 ];
 
+export const CHINITU_WAIT_QUESTION_COUNT = CHINITU_FIXTURE_CODES.length;
+
 const FU_QUESTIONS: readonly Omit<FuPracticeQuestion, 'handTiles'>[] & { handTileCodes?: never } = [
   {
     id: 'fu-menron-edge-yakuhai',
@@ -89,6 +91,8 @@ const FU_QUESTIONS: readonly Omit<FuPracticeQuestion, 'handTiles'>[] & { handTil
     breakdown: ['底符 20', '自摸 2', '幺九暗刻 8', '连风雀头 4', '合计 34，进位 40 符'],
   },
 ];
+
+export const FU_PRACTICE_QUESTION_COUNT = FU_QUESTIONS.length;
 
 const FU_HANDS: Record<string, TileCode[]> = {
   'fu-menron-edge-yakuhai': ['m1', 'm2', 'm3', 'm7', 'm8', 'm9', 'p1', 'p2', 'p3', 's7', 's8', 's9', 'z5', 'z5'],
@@ -157,6 +161,9 @@ const POINT_PRACTICE_VARIANTS = [
     ] satisfies readonly PointPracticeHandGroup[],
   },
 ] as const;
+
+export const POINT_PRACTICE_QUESTION_COUNT = POINT_PRACTICE_VARIANTS.length + 1;
+export const COMEBACK_PRACTICE_QUESTION_COUNT = 6;
 
 function pick<T>(items: readonly T[], seed: number): T {
   return items[Math.abs(seed) % items.length];
@@ -227,7 +234,8 @@ export function checkFuPracticeAnswer(question: FuPracticeQuestion, answerFu: nu
 }
 
 export function generatePointPracticeQuestion(seed = 0): PointPracticeQuestion {
-  if (seed % 5 === 4) {
+  const normalizedSeed = Math.abs(seed) % POINT_PRACTICE_QUESTION_COUNT;
+  if (normalizedSeed === POINT_PRACTICE_VARIANTS.length) {
     return {
       id: 'point-no-yaku',
       handTiles: tilesFromPointGroups(POINT_NO_YAKU_GROUPS),
@@ -243,7 +251,7 @@ export function generatePointPracticeQuestion(seed = 0): PointPracticeQuestion {
     };
   }
 
-  const variant = pick(POINT_PRACTICE_VARIANTS, seed);
+  const variant = POINT_PRACTICE_VARIANTS[normalizedSeed];
   const point = calculatePoint({
     han: variant.han,
     fu: variant.fu,

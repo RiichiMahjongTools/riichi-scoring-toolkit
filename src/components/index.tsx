@@ -502,7 +502,7 @@ export function tileCodeToMeta(code: string): TileMeta {
 
 export interface MahjongTileProps extends Omit<HTMLAttributes<HTMLSpanElement>, 'onClick'> {
   code: string;
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
   selected?: boolean;
   disabled?: boolean;
   onClick?: () => void;
@@ -830,7 +830,7 @@ export function TileKeyboard({
           maxSlots={Math.min(maxTiles, 14)}
           tiles={tiles}
           tileActionLabel={(index, tileLabel) => `选择第 ${index + 1} 张${tileLabel}为和牌`}
-          tileSize="sm"
+          tileSize="xs"
           onRemove={
             onPreviewTileSelect
               ? undefined

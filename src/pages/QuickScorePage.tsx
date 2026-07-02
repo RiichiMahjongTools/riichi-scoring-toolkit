@@ -297,7 +297,7 @@ export function QuickScorePage() {
                   code={tile}
                   marker={isWinning ? '和' : undefined}
                   selected={isWinning}
-                  size="sm"
+                  size="xs"
                   onClick={() => selectHandWinningIndex(index)}
                 />
               );
@@ -313,7 +313,7 @@ export function QuickScorePage() {
               <div key={`${meld.kind}-${index}`} className="mj-meld-row">
                 <div className="mj-meld-row__content">
                   <strong>{MELD_KIND_LABELS[meld.kind]}</strong>
-                  <TileStrip tileSize="sm" tiles={meld.tiles.map((tile) => tile.code)} />
+                  <TileStrip tileSize="xs" tiles={meld.tiles.map((tile) => tile.code)} />
                 </div>
                 <ActionButton
                   aria-label={`删除第 ${index + 1} 组副露`}
@@ -345,11 +345,11 @@ export function QuickScorePage() {
           <div className="mj-dora-compact">
             <button type="button" onClick={() => setKeyboardTarget('dora')}>
               <span>宝牌</span>
-              <TileStrip emptyLabel="无" maxSlots={5} tileSize="sm" tiles={doraIndicators} />
+              <TileStrip emptyLabel="无" maxSlots={5} tileSize="xs" tiles={doraIndicators} />
             </button>
             <button type="button" onClick={() => setKeyboardTarget('ura')}>
               <span>里宝牌</span>
-              <TileStrip emptyLabel="无" maxSlots={5} tileSize="sm" tiles={uraDoraIndicators} />
+              <TileStrip emptyLabel="无" maxSlots={5} tileSize="xs" tiles={uraDoraIndicators} />
             </button>
           </div>
         ) : null}
@@ -372,7 +372,7 @@ export function QuickScorePage() {
             <TileStrip
               emptyLabel={`选择${MELD_KIND_LABELS[meldKind]}所需牌`}
               maxSlots={meldTileLimit(meldKind)}
-              tileSize="sm"
+              tileSize="xs"
               tiles={meldDraftTiles}
               onRemove={(index) => setMeldDraftTiles(meldDraftTiles.filter((_, currentIndex) => currentIndex !== index))}
             />
