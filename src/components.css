@@ -35,30 +35,6 @@
   padding: 16px 0 8px;
 }
 
-.mj-status-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 44px;
-  padding: 0 18px;
-  color: var(--mj-ink);
-  font-family: 'Geist Mono', ui-monospace, monospace;
-  font-size: 13px;
-  font-weight: 800;
-}
-
-.mj-status-bar__icons {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-}
-
-.mj-status-bar__icons svg {
-  width: 15px;
-  height: 15px;
-  stroke-width: 2.4;
-}
-
 .mj-top-nav {
   display: grid;
   grid-template-columns: 66px minmax(0, 1fr) 66px;

@@ -1,5 +1,4 @@
 import {
-  BatteryFull,
   Check,
   ChevronLeft,
   Clipboard,
@@ -11,9 +10,7 @@ import {
   RotateCcw,
   Send,
   Share2,
-  Signal,
   Trash2,
-  Wifi,
   Wrench,
   X,
 } from 'lucide-react';
@@ -45,24 +42,10 @@ export function AppFrame({ nav, children, footer, className, ...props }: AppFram
   return (
     <div className={cx('mj-app-frame', className)} {...props}>
       <div className="mj-app-frame__chrome">
-        <StatusBar />
         {nav ? <div className="mj-app-frame__nav">{nav}</div> : null}
       </div>
       <main className="mj-app-frame__main">{children}</main>
       {footer ? <footer className="mj-app-frame__footer">{footer}</footer> : null}
-    </div>
-  );
-}
-
-export function StatusBar() {
-  return (
-    <div className="mj-status-bar" aria-hidden="true">
-      <span>9:41</span>
-      <span className="mj-status-bar__icons">
-        <Signal />
-        <Wifi />
-        <BatteryFull />
-      </span>
     </div>
   );
 }
