@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildHanFuTable,
-  calculatePoint,
+  calculateScoreCost,
   getLegalFuOptions,
   getLegalRonFuOptions,
   getLimitClass,
@@ -10,13 +10,13 @@ import {
 
 describe('han/fu point calculation', () => {
   it('matches the visible 1 han 30 fu lookup row', () => {
-    expect(calculatePoint({ han: 1, fu: 30, isDealer: true, winMethod: 'ron' }).payments.ron).toBe(1500);
-    expect(calculatePoint({ han: 1, fu: 30, isDealer: true, winMethod: 'tsumo' }).payments.tsumoAllPays).toBe(500);
+    expect(calculateScoreCost({ han: 1, fu: 30, is_dealer: true, is_tsumo: false }).cost.main).toBe(1500);
+    expect(calculateScoreCost({ han: 1, fu: 30, is_dealer: true, is_tsumo: true }).cost.main).toBe(500);
 
-    const nonDealerTsumo = calculatePoint({ han: 1, fu: 30, isDealer: false, winMethod: 'tsumo' });
-    expect(nonDealerTsumo.payments.tsumoNonDealerPays).toBe(300);
-    expect(nonDealerTsumo.payments.tsumoDealerPays).toBe(500);
-    expect(calculatePoint({ han: 1, fu: 30, isDealer: false, winMethod: 'ron' }).payments.ron).toBe(1000);
+    const nonDealerTsumo = calculateScoreCost({ han: 1, fu: 30, is_dealer: false, is_tsumo: true });
+    expect(nonDealerTsumo.cost.additional).toBe(300);
+    expect(nonDealerTsumo.cost.main).toBe(500);
+    expect(calculateScoreCost({ han: 1, fu: 30, is_dealer: false, is_tsumo: false }).cost.main).toBe(1000);
   });
 
   it('classifies limit hands', () => {

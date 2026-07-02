@@ -1,12 +1,19 @@
-import { baseTileCode, countPhysicalTiles, type BaseTileCode, type Tile, type Wind } from './tiles';
+import { Meld } from 'mahjong-ts';
+import {
+  baseTileCode,
+  countPhysicalTiles,
+  createTile,
+  getTileMeta,
+  isRedFive,
+  tileTo34,
+  type BaseTileCode,
+  type Tile,
+  type Wind,
+} from './tiles';
 
 export type ScoreMode = 'yonma' | 'sanma';
 export type MeldKind = 'chi' | 'pon' | 'openKan' | 'closedKan' | 'addedKan';
-
-export interface MeldInput {
-  kind: MeldKind;
-  tiles: Tile[];
-}
+export type MeldInput = Meld;
 
 export interface ScoreConditions {
   doubleRiichi: boolean;
@@ -23,6 +30,7 @@ export interface ScoreConditions {
 export interface ScoreInput {
   mode: ScoreMode;
   handTiles: Tile[];
+  winTile: Tile | null;
   melds: MeldInput[];
   doraIndicators: Tile[];
   uraDoraIndicators: Tile[];
@@ -52,18 +60,39 @@ export const DEFAULT_SCORE_CONDITIONS: ScoreConditions = {
   chiihou: false,
 };
 
+const MELD_KIND_TO_MAHJONG_TYPE: Record<MeldKind, string> = {
+  chi: Meld.CHI,
+  pon: Meld.PON,
+  openKan: Meld.KAN,
+  closedKan: Meld.KAN,
+  addedKan: Meld.SHOUMINKAN,
+};
+
+export function createMeldInput(kind: MeldKind, tiles: readonly Tile[]): MeldInput {
+  return new Meld({
+    meld_type: MELD_KIND_TO_MAHJONG_TYPE[kind],
+    tiles,
+    opened: kind !== 'closedKan',
+    called_tile: tiles[0] ?? null,
+    who: 0,
+  });
+}
+
+export function getMeldKind(meld: MeldInput): MeldKind {
+  if (meld.type === Meld.CHI) return 'chi';
+  if (meld.type === Meld.PON) return 'pon';
+  if (meld.type === Meld.SHOUMINKAN) return 'addedKan';
+  if (meld.type === Meld.KAN && !meld.opened) return 'closedKan';
+  return 'openKan';
+}
+
 function allPhysicalTiles(input: ScoreInput): Tile[] {
   return [
     ...input.handTiles,
     ...input.melds.flatMap((meld) => meld.tiles),
     ...input.doraIndicators,
     ...input.uraDoraIndicators,
-    ...Array.from({ length: input.mode === 'sanma' ? input.northDoraCount : 0 }, () => ({
-      code: 'z4' as const,
-      suit: 'z' as const,
-      rank: 4 as const,
-      red: false,
-    })),
+    ...Array.from({ length: input.mode === 'sanma' ? input.northDoraCount : 0 }, () => createTile('z4')),
   ];
 }
 
@@ -72,21 +101,35 @@ function validatePhysicalCounts(tiles: readonly Tile[], errors: string[]): void 
   for (const [code, count] of counts.entries()) {
     if (count > 4) errors.push(`${code} 超过 4 枚，赤五与普通五按同一张物理牌计数`);
   }
+
+  const redCounts = new Map<BaseTileCode, number>();
+  for (const tile of tiles) {
+    if (!isRedFive(tile)) continue;
+    const base = baseTileCode(tile);
+    redCounts.set(base, (redCounts.get(base) ?? 0) + 1);
+  }
+  for (const [code, count] of redCounts.entries()) {
+    if (count > 1) errors.push(`${code} 赤五最多只能有 1 枚`);
+  }
 }
 
 function validateMeldShape(meld: MeldInput, errors: string[]): void {
-  const baseCodes = meld.tiles.map((tile) => baseTileCode(tile.code));
+  const kind = getMeldKind(meld);
+  const tiles = meld.tiles;
+  const baseCodes = tiles.map(baseTileCode);
   const unique = new Set(baseCodes);
-  if (meld.kind === 'chi') {
-    if (meld.tiles.length !== 3) {
+
+  if (kind === 'chi') {
+    if (tiles.length !== 3) {
       errors.push('吃牌必须正好 3 枚');
       return;
     }
-    const [firstSuit] = meld.tiles;
-    const ranks = meld.tiles.map((tile) => tile.rank).sort((a, b) => a - b);
+    const [first] = tiles.map(getTileMeta);
+    const metas = tiles.map(getTileMeta);
+    const ranks = metas.map((tile) => tile.rank).sort((a, b) => a - b);
     if (
-      firstSuit.suit === 'z' ||
-      !meld.tiles.every((tile) => tile.suit === firstSuit.suit) ||
+      first.suit === 'z' ||
+      !metas.every((tile) => tile.suit === first.suit) ||
       ranks[0] + 1 !== ranks[1] ||
       ranks[1] + 1 !== ranks[2]
     ) {
@@ -95,12 +138,25 @@ function validateMeldShape(meld: MeldInput, errors: string[]): void {
     return;
   }
 
-  const expectedLength = meld.kind === 'pon' ? 3 : 4;
-  if (meld.tiles.length !== expectedLength) {
-    errors.push(`${meld.kind} 必须正好 ${expectedLength} 枚`);
+  const expectedLength = kind === 'pon' ? 3 : 4;
+  if (tiles.length !== expectedLength) {
+    errors.push(`${kind} 必须正好 ${expectedLength} 枚`);
     return;
   }
-  if (unique.size !== 1) errors.push(`${meld.kind} 必须由相同牌组成`);
+  if (unique.size !== 1) errors.push(`${kind} 必须由相同牌组成`);
+}
+
+function validateSanmaTiles(input: ScoreInput, errors: string[]): void {
+  if (input.mode !== 'sanma') return;
+
+  const illegalTiles = allPhysicalTiles(input).filter((tile) => {
+    const tile34 = tileTo34(tile);
+    return tile34 >= 1 && tile34 <= 7;
+  });
+  if (illegalTiles.length > 0) {
+    const labels = [...new Set(illegalTiles.map((tile) => getTileMeta(tile).label))].join('、');
+    errors.push(`三麻不使用二至八万：${labels}`);
+  }
 }
 
 export function expectedClosedTileCount(meldCount: number): number {
@@ -114,7 +170,7 @@ export function isCompleteHandTileCount(input: ScoreInput): boolean {
 export function getClosedBaseTileCounts(tiles: readonly Tile[]): Map<BaseTileCode, number> {
   const counts = new Map<BaseTileCode, number>();
   for (const tile of tiles) {
-    const base = baseTileCode(tile.code);
+    const base = baseTileCode(tile);
     counts.set(base, (counts.get(base) ?? 0) + 1);
   }
   return counts;
@@ -132,14 +188,23 @@ export function validateScoreInput(input: ScoreInput): ValidationResult {
 
   for (const meld of input.melds) validateMeldShape(meld, errors);
   validatePhysicalCounts(allPhysicalTiles(input), errors);
+  validateSanmaTiles(input, errors);
 
   const expectedClosed = expectedClosedTileCount(input.melds.length);
   if (input.handTiles.length !== expectedClosed) {
     warnings.push(`当前手牌 ${input.handTiles.length} 枚；完整和牌计算通常需要 ${expectedClosed} 枚（副露按 3 枚折算）`);
   }
 
+  if (isCompleteHandTileCount(input)) {
+    if (input.winTile === null) {
+      errors.push('请选择和牌张');
+    } else if (!input.handTiles.includes(input.winTile)) {
+      errors.push('和牌张必须来自闭合手牌');
+    }
+  }
+
   if (input.mode === 'sanma') {
-    if (input.melds.some((meld) => meld.kind === 'chi')) errors.push('三麻快速算分不支持吃牌');
+    if (input.melds.some((meld) => getMeldKind(meld) === 'chi')) errors.push('三麻快速算分不支持吃牌');
     warnings.push('三麻按常见日式三麻自摸损结算；不同店规可能不同');
   }
 

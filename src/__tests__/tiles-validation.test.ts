@@ -9,9 +9,11 @@ import {
 } from '../domain/tiles';
 
 function inputWithHand(codes: TileCode[]): ScoreInput {
+  const handTiles = parseTileCodes(codes);
   return {
     mode: 'yonma',
-    handTiles: parseTileCodes(codes),
+    handTiles,
+    winTile: handTiles[handTiles.length - 1] ?? null,
     melds: [],
     doraIndicators: [],
     uraDoraIndicators: [],
@@ -46,5 +48,13 @@ describe('tiles and validation', () => {
     const result = validateScoreInput(input);
     expect(result.ok).toBe(false);
     expect(result.errors.some((error) => error.includes('z4'))).toBe(true);
+  });
+
+  it('rejects two through eight man in sanma', () => {
+    const input = inputWithHand(['m2', 'p2', 'p3', 'p4']);
+    input.mode = 'sanma';
+    const result = validateScoreInput(input);
+    expect(result.ok).toBe(false);
+    expect(result.errors.some((error) => error.includes('三麻不使用二至八万'))).toBe(true);
   });
 });

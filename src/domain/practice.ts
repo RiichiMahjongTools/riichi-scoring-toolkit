@@ -1,6 +1,6 @@
 import { calculateHandEfficiency } from './efficiency';
-import { calculatePoint, getLegalRonFuOptions, type FuValue, type HanValue, type WinMethod } from './points';
-import { createTile, parseTileCodes, tileLabel, type Tile, type TileCode, type Wind } from './tiles';
+import { calculateScoreCost, getLegalRonFuOptions, type FuValue, type HanValue, type WinMethod } from './points';
+import { createTile, parseTileCodes, tileLabel, tileRank, tileSuit, type Tile, type TileCode, type Wind } from './tiles';
 
 export interface PracticeFeedback<TAnswer> {
   correct: boolean;
@@ -175,9 +175,9 @@ function tilesFromPointGroups(groups: readonly PointPracticeHandGroup[]): Tile[]
 
 function ranksFromEffectiveTiles(question: ChinituWaitQuestion): number[] {
   const result = calculateHandEfficiency({ mode: 'yonma', handTiles: question.handTiles });
-  return result.effectiveTiles
-    .filter((entry) => entry.tile.suit === question.suit)
-    .map((entry) => Number(entry.tile.rank))
+  return result.effective_tiles
+    .filter((entry) => tileSuit(entry.tile) === question.suit)
+    .map((entry) => Number(tileRank(entry.tile)))
     .sort((a, b) => a - b);
 }
 
@@ -252,11 +252,11 @@ export function generatePointPracticeQuestion(seed = 0): PointPracticeQuestion {
   }
 
   const variant = POINT_PRACTICE_VARIANTS[normalizedSeed];
-  const point = calculatePoint({
+  const point = calculateScoreCost({
     han: variant.han,
     fu: variant.fu,
-    isDealer: variant.seatWind === 'east',
-    winMethod: variant.winMethod,
+    is_dealer: variant.seatWind === 'east',
+    is_tsumo: variant.winMethod === 'tsumo',
   });
 
   return {
@@ -269,11 +269,11 @@ export function generatePointPracticeQuestion(seed = 0): PointPracticeQuestion {
     han: variant.han,
     fu: variant.fu,
     noYaku: false,
-    answerTotalPoints: point.payments.totalGain,
+    answerTotalPoints: point.cost.total,
     breakdown: [
       `${variant.han} 番 ${variant.fu} 符`,
       variant.seatWind === 'east' ? '庄家' : '子家',
-      variant.winMethod === 'ron' ? `荣和 ${point.payments.ron} 点` : `自摸合计 ${point.payments.totalGain} 点`,
+      variant.winMethod === 'ron' ? `荣和 ${point.cost.main} 点` : `自摸合计 ${point.cost.total} 点`,
     ],
   };
 }
@@ -293,8 +293,8 @@ export function minimumFuForComeback(params: {
   isDealer: boolean;
 }): FuValue | 'impossible' {
   for (const fu of getLegalRonFuOptions(params.han)) {
-    const point = calculatePoint({ han: params.han, fu, isDealer: params.isDealer, winMethod: 'ron' });
-    if ((point.payments.ron ?? 0) >= params.pointGap) return fu;
+    const point = calculateScoreCost({ han: params.han, fu, is_dealer: params.isDealer, is_tsumo: false });
+    if (point.cost.main >= params.pointGap) return fu;
   }
   return 'impossible';
 }

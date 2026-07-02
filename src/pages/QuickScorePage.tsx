@@ -14,16 +14,18 @@ import {
   DEFAULT_SCORE_CONDITIONS,
   baseTileCode,
   calculateScoreOrEfficiency,
-  countRedDora,
+  createMeldInput,
   expectedClosedTileCount,
+  getMeldKind,
+  getTileMeta,
   isTileCode,
   parseTileCodes,
+  tileToCode,
   type MeldInput,
   type MeldKind,
   type ScoreComputation,
   type ScoreConditions,
   type ScoreMode,
-  type ScoreResult,
   type TileCode,
   type Wind,
 } from '../domain';
@@ -113,11 +115,12 @@ function validateMeldDraft(kind: MeldKind, tiles: TileCode[], mode: ScoreMode): 
   const uniqueBaseCodes = new Set(baseCodes);
 
   if (kind === 'chi') {
-    const [first] = parsedTiles;
-    const ranks = parsedTiles.map((tile) => tile.rank).sort((a, b) => a - b);
+    const metas = parsedTiles.map(getTileMeta);
+    const [first] = metas;
+    const ranks = metas.map((tile) => tile.rank).sort((a, b) => a - b);
     const isSequence =
       first.suit !== 'z' &&
-      parsedTiles.every((tile) => tile.suit === first.suit) &&
+      metas.every((tile) => tile.suit === first.suit) &&
       ranks[0] + 1 === ranks[1] &&
       ranks[1] + 1 === ranks[2];
     return isSequence ? '' : '吃牌必须是同一数牌花色的连续 3 枚';
@@ -126,15 +129,10 @@ function validateMeldDraft(kind: MeldKind, tiles: TileCode[], mode: ScoreMode): 
   return uniqueBaseCodes.size === 1 ? '' : `${MELD_KIND_LABELS[kind]}必须由相同牌组成`;
 }
 
-function normalizeWinningIndex(length: number, expectedLength: number, index: number | null): number | null {
+function normalizeWinTileIndex(length: number, expectedLength: number, index: number | null): number | null {
   if (length === 0 || length !== expectedLength) return null;
   if (index === null) return length - 1;
   return Math.min(Math.max(index, 0), length - 1);
-}
-
-function moveTileToEnd<T>(tiles: readonly T[], index: number | null): T[] {
-  if (index === null || index === tiles.length - 1) return [...tiles];
-  return [...tiles.slice(0, index), ...tiles.slice(index + 1), tiles[index]];
 }
 
 async function copyResult(text: string, onDone: (message: string) => void) {
@@ -156,7 +154,7 @@ export function QuickScorePage() {
   const initialImportedTiles = parseQuickScoreTileImport(window.location.hash);
   const [mode, setMode] = useState<ScoreMode>('yonma');
   const [handTiles, setHandTiles] = useState<TileCode[]>(initialImportedTiles);
-  const [winningTileIndex, setWinningTileIndex] = useState<number | null>(
+  const [winTileIndex, setWinTileIndex] = useState<number | null>(
     initialImportedTiles.length > 0 ? initialImportedTiles.length - 1 : null,
   );
   const [melds, setMelds] = useState<MeldInput[]>([]);
@@ -174,19 +172,15 @@ export function QuickScorePage() {
   const [copyMessage, setCopyMessage] = useState('');
   const meldDraftError = validateMeldDraft(meldKind, meldDraftTiles, mode);
   const expectedClosedTiles = expectedClosedTileCount(melds.length);
-  const selectedHandWinningIndex = normalizeWinningIndex(handTiles.length, expectedClosedTiles, winningTileIndex);
-  const scoringHandTiles = useMemo(
-    () => moveTileToEnd(handTiles, selectedHandWinningIndex),
-    [handTiles, selectedHandWinningIndex],
-  );
+  const selectedHandWinTileIndex = normalizeWinTileIndex(handTiles.length, expectedClosedTiles, winTileIndex);
 
   useEffect(() => {
     const applyImportedTiles = () => {
       const importedTiles = parseQuickScoreTileImport(window.location.hash);
       if (importedTiles.length === 0) return;
       setHandTiles(importedTiles);
-      setWinningTileIndex(importedTiles.length - 1);
-      setCopyMessage('已带入识别手牌，请确认最后一张和牌');
+      setWinTileIndex(importedTiles.length - 1);
+      setCopyMessage('已带入识别手牌，请确认和牌张/最后摸切张');
     };
 
     applyImportedTiles();
@@ -195,12 +189,14 @@ export function QuickScorePage() {
   }, []);
 
   const computation = useMemo<QuickComputation>(() => {
-    if (scoringHandTiles.length === 0) return { kind: 'empty' };
+    if (handTiles.length === 0) return { kind: 'empty' };
 
     try {
+      const parsedHandTiles = parseTileCodes(handTiles);
       return calculateScoreOrEfficiency({
         mode,
-        handTiles: parseTileCodes(scoringHandTiles),
+        handTiles: parsedHandTiles,
+        winTile: selectedHandWinTileIndex === null ? null : parsedHandTiles[selectedHandWinTileIndex],
         melds,
         doraIndicators: parseTileCodes(doraIndicators),
         uraDoraIndicators: parseTileCodes(uraDoraIndicators),
@@ -227,7 +223,8 @@ export function QuickScorePage() {
     mode,
     northDoraCount,
     roundWind,
-    scoringHandTiles,
+    handTiles,
+    selectedHandWinTileIndex,
     seatWind,
     uraDoraIndicators,
   ]);
@@ -257,16 +254,16 @@ export function QuickScorePage() {
     }
     const previousLength = handTiles.length;
     setHandTiles(next);
-    setWinningTileIndex((current) => {
+    setWinTileIndex((current) => {
       if (next.length !== expectedClosedTiles) return null;
       if (next.length !== previousLength || current === null) return next.length - 1;
       return Math.min(current, next.length - 1);
     });
   };
 
-  const selectHandWinningIndex = (index: number) => {
+  const selectHandWinTileIndex = (index: number) => {
     if (handTiles.length === 0) return;
-    setWinningTileIndex(index);
+    setWinTileIndex(index);
   };
 
   const selectMode = (nextMode: ScoreMode) => {
@@ -277,13 +274,13 @@ export function QuickScorePage() {
 
   const addMeld = () => {
     if (meldDraftError || melds.length >= 4) return;
-    setMelds((value) => [...value, { kind: meldKind, tiles: parseTileCodes(meldDraftTiles) }]);
+    setMelds((value) => [...value, createMeldInput(meldKind, parseTileCodes(meldDraftTiles))]);
     setMeldDraftTiles([]);
   };
 
   const reset = () => {
     setHandTiles([]);
-    setWinningTileIndex(null);
+    setWinTileIndex(null);
     setMelds([]);
     setMeldDraftTiles([]);
     setDoraIndicators([]);
@@ -317,12 +314,12 @@ export function QuickScorePage() {
       <section className="mj-design-card mj-quick-hand-card">
         <header className="mj-design-card__header">
           <h2>手牌与副露</h2>
-          <span>{handTiles.length}/{expectedClosedTiles}</span>
+          <span>和牌张/最后摸切张 {handTiles.length}/{expectedClosedTiles}</span>
         </header>
-        <div className="mj-quick-tile-row" aria-label="当前手牌">
+        <div className="mj-quick-tile-row" aria-label="当前手牌与和牌张/最后摸切张">
           {handTiles.length > 0 ? (
             handTiles.map((tile, index) => {
-              const isWinning = index === selectedHandWinningIndex;
+              const isWinning = index === selectedHandWinTileIndex;
               return (
                 <MahjongTile
                   key={`${tile}-${index}`}
@@ -331,7 +328,7 @@ export function QuickScorePage() {
                   marker={isWinning ? '和' : undefined}
                   selected={isWinning}
                   size="xs"
-                  onClick={() => selectHandWinningIndex(index)}
+                  onClick={() => selectHandWinTileIndex(index)}
                 />
               );
             })
@@ -343,10 +340,10 @@ export function QuickScorePage() {
         {melds.length > 0 ? (
           <div className="mj-meld-list" aria-label="已录入副露面子">
             {melds.map((meld, index) => (
-              <div key={`${meld.kind}-${index}`} className="mj-meld-row">
+              <div key={`${meld.type}-${index}`} className="mj-meld-row">
                 <div className="mj-meld-row__content">
-                  <strong>{MELD_KIND_LABELS[meld.kind]}</strong>
-                  <TileStrip tileSize="xs" tiles={meld.tiles.map((tile) => tile.code)} />
+                  <strong>{MELD_KIND_LABELS[getMeldKind(meld)]}</strong>
+                  <TileStrip tileSize="xs" tiles={meld.tiles.map(tileToCode)} />
                 </div>
                 <ActionButton
                   aria-label={`删除第 ${index + 1} 组副露`}
@@ -565,7 +562,7 @@ export function QuickScorePage() {
               : 5
         }
         open={keyboardTarget !== null}
-        previewHighlightIndex={keyboardTarget === 'hand' ? selectedHandWinningIndex : null}
+        previewHighlightIndex={keyboardTarget === 'hand' ? selectedHandWinTileIndex : null}
         previewHighlightLast={false}
         previewLabel={
           keyboardTarget === 'hand'
@@ -580,7 +577,7 @@ export function QuickScorePage() {
         onChange={setKeyboardTiles}
         onClose={() => setKeyboardTarget(null)}
         onDone={() => setKeyboardTarget(null)}
-        onPreviewTileSelect={keyboardTarget === 'hand' ? selectHandWinningIndex : undefined}
+        onPreviewTileSelect={keyboardTarget === 'hand' ? selectHandWinTileIndex : undefined}
       />
     </div>
   );
@@ -654,8 +651,8 @@ function QuickScorePanel({ computation, seatWind }: { computation: QuickComputat
 
   if (computation.kind === 'score' && computation.result.valid) {
     const result = computation.result;
-    const value = formatPoints(result.payments?.totalGain).replace(' 点', '');
-    const method = result.payments?.ron === undefined ? '自摸' : '荣和';
+    const value = formatPoints(result.cost?.total).replace(' 点', '');
+    const method = result.is_tsumo ? '自摸' : '荣和';
     const seat = WIND_LABELS[seatWind] === '东' ? '庄家' : '闲家';
 
     return (
@@ -664,9 +661,10 @@ function QuickScorePanel({ computation, seatWind }: { computation: QuickComputat
         <strong>{value}</strong>
         <small>{seat}{method} · {formatHan(result.han)}{formatFu(result.fu)} · {formatLimit(result)}</small>
         <div className="mj-score-badges">
-          {result.payments?.ron !== undefined ? <b>放铳 {formatPoints(result.payments.ron).replace(' 点', '')}</b> : null}
-          {result.payments?.tsumoDealerPays !== undefined ? <b>庄家 {formatPoints(result.payments.tsumoDealerPays).replace(' 点', '')}</b> : null}
-          {result.payments?.tsumoNonDealerPays !== undefined ? <b>子家 {formatPoints(result.payments.tsumoNonDealerPays).replace(' 点', '')}</b> : null}
+          {!result.is_tsumo ? <b>放铳 {formatPoints(result.cost?.main).replace(' 点', '')}</b> : null}
+          {result.is_tsumo && result.is_dealer ? <b>每家 {formatPoints(result.cost?.main).replace(' 点', '')}</b> : null}
+          {result.is_tsumo && !result.is_dealer ? <b>庄家 {formatPoints(result.cost?.main).replace(' 点', '')}</b> : null}
+          {result.is_tsumo && !result.is_dealer ? <b>子家 {formatPoints(result.cost?.additional).replace(' 点', '')}</b> : null}
         </div>
       </section>
     );
@@ -689,9 +687,9 @@ function QuickEfficiencyPanel({ computation }: { computation: QuickComputation }
   if (computation.kind !== 'efficiency') return null;
 
   const result = computation.result;
-  const effectiveTiles = result.effectiveTiles.slice(0, 7).map((entry) => entry.tile.code);
+  const effective_tiles = result.effective_tiles.slice(0, 7).map((entry) => tileToCode(entry.tile));
   const shantenText = result.shanten < 0 ? '听牌/和牌' : `${result.shanten} 向听`;
-  const countText = `${result.totalEffectiveTileCount} 枚`;
+  const countText = `${result.total_effective_tiles} 枚`;
 
   return (
     <section className="mj-design-card">
@@ -700,8 +698,8 @@ function QuickEfficiencyPanel({ computation }: { computation: QuickComputation }
       </header>
       <p className="mj-efficiency-title">{shantenText} · 有效牌 {countText}</p>
       <div className="mj-quick-tile-row">
-        {effectiveTiles.length > 0 ? (
-          effectiveTiles.map((tile, index) => (
+        {effective_tiles.length > 0 ? (
+          effective_tiles.map((tile, index) => (
             <MahjongTile key={`${tile}-${index}`} code={tile} size="sm" />
           ))
         ) : (
@@ -716,14 +714,14 @@ function makeResultText(computation: QuickComputation): string {
   if (computation.kind === 'empty' || computation.kind === 'invalid') return '';
   if (computation.kind === 'efficiency') {
     const result = computation.result;
-    return `牌效估算：${result.shanten} 向听，有效牌 ${result.totalEffectiveTileCount} 枚`;
+    return `牌效估算：${result.shanten} 向听，有效牌 ${result.total_effective_tiles} 枚`;
   }
   const result = computation.result;
   if (!result.valid) return `不能计分：${result.warnings.join('、') || '没有役'}`;
   return [
     `日麻算分：${formatHan(result.han)} ${formatFu(result.fu)} ${formatLimit(result)}`,
-    `方式：${formatWinMethod(result.payments?.ron === undefined ? 'tsumo' : 'ron')}`,
-    `收入：${formatPoints(result.payments?.totalGain)}`,
+    `方式：${formatWinMethod(result.is_tsumo ? 'tsumo' : 'ron')}`,
+    `收入：${formatPoints(result.cost?.total)}`,
     `役种：${result.yaku.map((yaku) => `${yaku.name}${formatHan(yaku.han)}`).join('、')}`,
   ].join('\n');
 }

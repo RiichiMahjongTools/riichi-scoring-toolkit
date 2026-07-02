@@ -27,6 +27,7 @@ import {
   generateFuPracticeQuestion,
   generatePointPracticeQuestion,
   getLegalRonFuOptions,
+  tileToCode,
   type FuValue,
   type PointPracticeHandGroup,
   type PointPracticeQuestion,
@@ -156,7 +157,7 @@ export function ChinitsuPracticePage() {
       />
 
       <SectionCard className="mj-practice-hand-card mj-chinitsu-hand-card" title="清一色手牌">
-        <TileStrip tileSize="xs" tiles={question.handTiles.map((tile) => tile.code)} />
+        <TileStrip tileSize="xs" tiles={question.handTiles.map(tileToCode)} />
       </SectionCard>
 
       {feedback ? (
@@ -264,7 +265,7 @@ export function FuPracticePage() {
       />
 
       <SectionCard className="mj-practice-hand-card" title="题面手牌">
-        <TileStrip highlightLast tileSize="xs" tiles={question.handTiles.map((tile) => tile.code)} />
+        <TileStrip highlightLast tileSize="xs" tiles={question.handTiles.map(tileToCode)} />
         <div className="mj-practice-hand-meta">
           <Chip selected>{formatWinMethod(question.winMethod)}</Chip>
           <Chip selected>场风{WIND_LABELS[question.roundWind]}</Chip>

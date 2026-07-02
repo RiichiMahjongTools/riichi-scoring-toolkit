@@ -1,3 +1,10 @@
+import {
+  HandConfig,
+  OptionalRules,
+  ScoresCalculator,
+  type ScoresResult,
+} from 'mahjong-ts';
+
 export type WinMethod = 'ron' | 'tsumo';
 export type LimitClass =
   | 'mangan'
@@ -11,29 +18,26 @@ export type LimitClass =
 export type FuValue = 20 | 25 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100 | 110;
 export type HanValue = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13;
 
-export interface PointQuery {
+export interface ScoreCostQuery {
   han: number;
   fu: number;
-  isDealer: boolean;
-  winMethod: WinMethod;
-  honba?: number;
+  is_dealer: boolean;
+  is_tsumo: boolean;
+  tsumi_number?: number;
+  is_three_player?: boolean;
+  is_yakuman?: boolean;
 }
 
 export interface PointResult {
   han: number;
   fu: number;
-  isDealer: boolean;
-  winMethod: WinMethod;
-  basePoints: number;
+  is_dealer: boolean;
+  is_tsumo: boolean;
+  tsumi_number: number;
+  cost: ScoresResult<number>;
+  yaku_level: string;
+  yaku_level_label: string | null;
   limit: LimitClass | null;
-  limitLabel: string | null;
-  payments: {
-    ron?: number;
-    tsumoAllPays?: number;
-    tsumoDealerPays?: number;
-    tsumoNonDealerPays?: number;
-    totalGain: number;
-  };
 }
 
 export interface HanFuTableRow {
@@ -50,8 +54,9 @@ export interface HanFuTableRow {
     tsumoDealerPays: number;
     tsumoNonDealerPays: number;
   };
+  yaku_level: string;
+  yaku_level_label: string | null;
   limit: LimitClass | null;
-  limitLabel: string | null;
 }
 
 export const STANDARD_FU_VALUES: readonly FuValue[] = [20, 25, 30, 40, 50, 60, 70, 80, 90, 100, 110];
@@ -67,33 +72,59 @@ const LIMIT_LABELS: Record<LimitClass, string> = {
   'composite-yakuman': '累计役满',
 };
 
-function ceil100(value: number): number {
-  return Math.ceil(value / 100) * 100;
+function normalizeYakuLevel(yakuLevel: string): LimitClass | null {
+  if (!yakuLevel) return null;
+  if (yakuLevel.includes('mangan')) return 'mangan';
+  if (yakuLevel === 'haneman') return 'haneman';
+  if (yakuLevel === 'baiman') return 'baiman';
+  if (yakuLevel === 'sanbaiman') return 'sanbaiman';
+  if (yakuLevel === 'yakuman' || yakuLevel === 'kazoe yakuman') return 'yakuman';
+  if (yakuLevel === '2x yakuman') return 'double-yakuman';
+  if (yakuLevel.endsWith('yakuman')) return 'composite-yakuman';
+  return null;
+}
+
+export function yakuLevelLabel(limit: LimitClass | null): string | null {
+  return limit ? LIMIT_LABELS[limit] : null;
+}
+
+function makeScoreConfig(query: ScoreCostQuery): HandConfig {
+  return new HandConfig({
+    is_tsumo: query.is_tsumo,
+    player_wind: query.is_dealer ? 27 : 28,
+    tsumi_number: Math.max(0, Math.trunc(query.tsumi_number ?? 0)),
+    options: new OptionalRules({
+      is_three_player: query.is_three_player ?? false,
+    }),
+  });
+}
+
+export function calculateScoreCost(query: ScoreCostQuery): PointResult {
+  const config = makeScoreConfig(query);
+  const cost = ScoresCalculator.calculate_scores(
+    query.han,
+    query.fu,
+    config,
+    query.is_yakuman ?? false,
+  ) as ScoresResult<number>;
+  const limit = normalizeYakuLevel(cost.yaku_level);
+
+  return {
+    han: query.han,
+    fu: query.fu,
+    is_dealer: query.is_dealer,
+    is_tsumo: query.is_tsumo,
+    tsumi_number: config.tsumi_number,
+    cost,
+    yaku_level: cost.yaku_level,
+    yaku_level_label: yakuLevelLabel(limit),
+    limit,
+  };
 }
 
 export function getLimitClass(han: number, fu: number): { limit: LimitClass | null; basePoints: number } {
-  if (han >= 26) {
-    const yakumanCount = Math.floor(han / 13);
-    return {
-      limit: yakumanCount > 2 ? 'composite-yakuman' : yakumanCount === 2 ? 'double-yakuman' : 'yakuman',
-      basePoints: 8000 * Math.max(1, yakumanCount),
-    };
-  }
-  if (han >= 13) return { limit: 'yakuman', basePoints: 8000 };
-  if (han >= 11) return { limit: 'sanbaiman', basePoints: 6000 };
-  if (han >= 8) return { limit: 'baiman', basePoints: 4000 };
-  if (han >= 6) return { limit: 'haneman', basePoints: 3000 };
-  if (han === 5 || (han === 4 && fu >= 40) || (han === 3 && fu >= 70)) {
-    return { limit: 'mangan', basePoints: 2000 };
-  }
-
-  const rawBasePoints = fu * 2 ** (han + 2);
-  if (rawBasePoints >= 2000) return { limit: 'mangan', basePoints: 2000 };
-  return { limit: null, basePoints: rawBasePoints };
-}
-
-export function limitLabel(limit: LimitClass | null): string | null {
-  return limit ? LIMIT_LABELS[limit] : null;
+  const result = calculateScoreCost({ han, fu, is_dealer: false, is_tsumo: false });
+  return { limit: result.limit, basePoints: 0 };
 }
 
 export function isLegalHanFu(han: number, fu: number): boolean {
@@ -112,65 +143,12 @@ export function getLegalRonFuOptions(han: number): FuValue[] {
   return getLegalFuOptions(han).filter((fu) => fu !== 20);
 }
 
-export function calculatePoint(query: PointQuery): PointResult {
-  const honba = Math.max(0, Math.trunc(query.honba ?? 0));
-  const { limit, basePoints } = getLimitClass(query.han, query.fu);
-
-  if (query.winMethod === 'ron') {
-    const ron = ceil100(basePoints * (query.isDealer ? 6 : 4)) + honba * 300;
-    return {
-      han: query.han,
-      fu: query.fu,
-      isDealer: query.isDealer,
-      winMethod: query.winMethod,
-      basePoints,
-      limit,
-      limitLabel: limitLabel(limit),
-      payments: { ron, totalGain: ron },
-    };
-  }
-
-  if (query.isDealer) {
-    const tsumoAllPays = ceil100(basePoints * 2) + honba * 100;
-    return {
-      han: query.han,
-      fu: query.fu,
-      isDealer: query.isDealer,
-      winMethod: query.winMethod,
-      basePoints,
-      limit,
-      limitLabel: limitLabel(limit),
-      payments: {
-        tsumoAllPays,
-        totalGain: tsumoAllPays * 3,
-      },
-    };
-  }
-
-  const tsumoDealerPays = ceil100(basePoints * 2) + honba * 100;
-  const tsumoNonDealerPays = ceil100(basePoints) + honba * 100;
-  return {
-    han: query.han,
-    fu: query.fu,
-    isDealer: query.isDealer,
-    winMethod: query.winMethod,
-    basePoints,
-    limit,
-    limitLabel: limitLabel(limit),
-    payments: {
-      tsumoDealerPays,
-      tsumoNonDealerPays,
-      totalGain: tsumoDealerPays + tsumoNonDealerPays * 2,
-    },
-  };
-}
-
 export function buildHanFuTableRow(han: HanValue, fu: FuValue): HanFuTableRow {
   const legal = isLegalHanFu(han, fu);
-  const dealerRon = calculatePoint({ han, fu, isDealer: true, winMethod: 'ron' });
-  const dealerTsumo = calculatePoint({ han, fu, isDealer: true, winMethod: 'tsumo' });
-  const nonDealerRon = calculatePoint({ han, fu, isDealer: false, winMethod: 'ron' });
-  const nonDealerTsumo = calculatePoint({ han, fu, isDealer: false, winMethod: 'tsumo' });
+  const dealerRon = calculateScoreCost({ han, fu, is_dealer: true, is_tsumo: false });
+  const dealerTsumo = calculateScoreCost({ han, fu, is_dealer: true, is_tsumo: true });
+  const nonDealerRon = calculateScoreCost({ han, fu, is_dealer: false, is_tsumo: false });
+  const nonDealerTsumo = calculateScoreCost({ han, fu, is_dealer: false, is_tsumo: true });
 
   return {
     han,
@@ -178,16 +156,17 @@ export function buildHanFuTableRow(han: HanValue, fu: FuValue): HanFuTableRow {
     legal,
     note: legal ? undefined : '通常不成立的番符组合',
     dealer: {
-      ron: dealerRon.payments.ron ?? 0,
-      tsumo: dealerTsumo.payments.tsumoAllPays ?? 0,
+      ron: dealerRon.cost.main,
+      tsumo: dealerTsumo.cost.main,
     },
     nonDealer: {
-      ron: nonDealerRon.payments.ron ?? 0,
-      tsumoDealerPays: nonDealerTsumo.payments.tsumoDealerPays ?? 0,
-      tsumoNonDealerPays: nonDealerTsumo.payments.tsumoNonDealerPays ?? 0,
+      ron: nonDealerRon.cost.main,
+      tsumoDealerPays: nonDealerTsumo.cost.main,
+      tsumoNonDealerPays: nonDealerTsumo.cost.additional,
     },
+    yaku_level: dealerRon.yaku_level,
+    yaku_level_label: dealerRon.yaku_level_label,
     limit: dealerRon.limit,
-    limitLabel: dealerRon.limitLabel,
   };
 }
 
@@ -196,7 +175,11 @@ export function buildHanFuTable(hanValues: readonly HanValue[] = STANDARD_HAN_VA
 }
 
 export function formatTsumoSplit(result: PointResult): string {
-  if (result.winMethod !== 'tsumo') return '';
-  if (result.isDealer) return `${result.payments.tsumoAllPays ?? 0} all`;
-  return `${result.payments.tsumoNonDealerPays ?? 0}/${result.payments.tsumoDealerPays ?? 0}`;
+  if (!result.is_tsumo) return '';
+  if (result.is_dealer) return `${result.cost.main} all`;
+  return `${result.cost.additional}/${result.cost.main}`;
+}
+
+export function scoreCostTotal(result: PointResult): number {
+  return result.cost.total;
 }

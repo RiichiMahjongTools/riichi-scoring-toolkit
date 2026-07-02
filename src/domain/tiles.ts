@@ -1,3 +1,15 @@
+import {
+  AKA_DORAS,
+  EAST,
+  FIVE_RED_MAN,
+  FIVE_RED_PIN,
+  FIVE_RED_SOU,
+  NORTH,
+  SOUTH,
+  TilesConverter,
+  WEST,
+} from 'mahjong-ts';
+
 export type NumberSuit = 'm' | 'p' | 's';
 export type HonorSuit = 'z';
 export type TileSuit = NumberSuit | HonorSuit;
@@ -41,16 +53,12 @@ export type HonorTileCode = 'z1' | 'z2' | 'z3' | 'z4' | 'z5' | 'z6' | 'z7';
 export type TileCode = NumberTileCode | HonorTileCode;
 export type BaseTileCode = Exclude<TileCode, 'm5r' | 'p5r' | 's5r'>;
 
-export interface Tile {
-  code: TileCode;
-  suit: TileSuit;
-  rank: TileRank | HonorRank;
-  red: boolean;
-}
+export type Tile = number;
 
 export interface TileMeta {
   code: TileCode;
   baseCode: BaseTileCode;
+  tile34: number;
   suit: TileSuit;
   rank: TileRank | HonorRank;
   red: boolean;
@@ -75,6 +83,7 @@ const NUMBER_ASSET_PREFIX: Record<NumberSuit, string> = {
 const HONORS: Record<
   HonorTileCode,
   {
+    tile34: number;
     rank: HonorRank;
     label: string;
     shortLabel: string;
@@ -82,13 +91,13 @@ const HONORS: Record<
     wind?: Wind;
   }
 > = {
-  z1: { rank: 1, label: '东', shortLabel: '东', assetFilename: 'Ton.png', wind: 'east' },
-  z2: { rank: 2, label: '南', shortLabel: '南', assetFilename: 'Nan.png', wind: 'south' },
-  z3: { rank: 3, label: '西', shortLabel: '西', assetFilename: 'Shaa.png', wind: 'west' },
-  z4: { rank: 4, label: '北', shortLabel: '北', assetFilename: 'Pei.png', wind: 'north' },
-  z5: { rank: 5, label: '白', shortLabel: '白', assetFilename: 'Haku.png' },
-  z6: { rank: 6, label: '发', shortLabel: '发', assetFilename: 'Hatsu.png' },
-  z7: { rank: 7, label: '中', shortLabel: '中', assetFilename: 'Chun.png' },
+  z1: { tile34: EAST, rank: 1, label: '东', shortLabel: '东', assetFilename: 'Ton.png', wind: 'east' },
+  z2: { tile34: SOUTH, rank: 2, label: '南', shortLabel: '南', assetFilename: 'Nan.png', wind: 'south' },
+  z3: { tile34: WEST, rank: 3, label: '西', shortLabel: '西', assetFilename: 'Shaa.png', wind: 'west' },
+  z4: { tile34: NORTH, rank: 4, label: '北', shortLabel: '北', assetFilename: 'Pei.png', wind: 'north' },
+  z5: { tile34: 31, rank: 5, label: '白', shortLabel: '白', assetFilename: 'Haku.png' },
+  z6: { tile34: 32, rank: 6, label: '发', shortLabel: '发', assetFilename: 'Hatsu.png' },
+  z7: { tile34: 33, rank: 7, label: '中', shortLabel: '中', assetFilename: 'Chun.png' },
 };
 
 const BASE_CODES: BaseTileCode[] = [
@@ -171,26 +180,86 @@ export const ALL_TILE_CODES: readonly TileCode[] = [
 
 export const RED_FIVE_CODES: readonly TileCode[] = ['m5r', 'p5r', 's5r'];
 
+const TILE_34_TO_BASE_CODE = new Map<number, BaseTileCode>(BASE_CODES.map((code, tile34) => [tile34, code]));
+const BASE_CODE_TO_TILE_34 = new Map<BaseTileCode, number>(BASE_CODES.map((code, tile34) => [code, tile34]));
+const RED_CODE_TO_136: Record<'m5r' | 'p5r' | 's5r', number> = {
+  m5r: FIVE_RED_MAN,
+  p5r: FIVE_RED_PIN,
+  s5r: FIVE_RED_SOU,
+};
+const RED_TILE_136_TO_CODE = new Map<number, TileCode>([
+  [FIVE_RED_MAN, 'm5r'],
+  [FIVE_RED_PIN, 'p5r'],
+  [FIVE_RED_SOU, 's5r'],
+]);
+
 export function isTileCode(value: string): value is TileCode {
   return (ALL_TILE_CODES as readonly string[]).includes(value);
 }
 
-export function isRedFive(code: TileCode): boolean {
-  return code === 'm5r' || code === 'p5r' || code === 's5r';
+export function isRedFive(tileOrCode: Tile | TileCode): boolean {
+  if (typeof tileOrCode === 'number') return AKA_DORAS.has(tileOrCode);
+  return tileOrCode === 'm5r' || tileOrCode === 'p5r' || tileOrCode === 's5r';
 }
 
-export function baseTileCode(code: TileCode): BaseTileCode {
+export function tileTo34(tile: Tile): number {
+  return Math.floor(tile / 4);
+}
+
+export function tile34ToBaseCode(tile34: number): BaseTileCode {
+  const code = TILE_34_TO_BASE_CODE.get(tile34);
+  if (!code) throw new Error(`Unsupported mahjong-ts tile_34: ${tile34}`);
+  return code;
+}
+
+export function tileCodeTo34(code: TileCode): number {
+  const base = baseTileCode(code);
+  const tile34 = BASE_CODE_TO_TILE_34.get(base);
+  if (tile34 === undefined) throw new Error(`Unsupported tile code: ${code}`);
+  return tile34;
+}
+
+export function tileToCode(tile: Tile): TileCode {
+  const red = RED_TILE_136_TO_CODE.get(tile);
+  if (red) return red;
+  return tile34ToBaseCode(tileTo34(tile));
+}
+
+export function baseTileCode(tileOrCode: Tile | TileCode): BaseTileCode {
+  const code = typeof tileOrCode === 'number' ? tileToCode(tileOrCode) : tileOrCode;
   if (code === 'm5r') return 'm5';
   if (code === 'p5r') return 'p5';
   if (code === 's5r') return 's5';
   return code;
 }
 
+function allocateTile136(code: TileCode, usedByBase: Map<BaseTileCode, Set<number>>): Tile {
+  const baseCode = baseTileCode(code);
+  const tile34 = tileCodeTo34(code);
+  const used = usedByBase.get(baseCode) ?? new Set<number>();
+  usedByBase.set(baseCode, used);
+
+  if (code === 'm5r' || code === 'p5r' || code === 's5r') {
+    const redTile = RED_CODE_TO_136[code];
+    used.add(redTile);
+    return redTile;
+  }
+
+  const firstCopy = tile34 * 4;
+  const offsets = baseCode === 'm5' || baseCode === 'p5' || baseCode === 's5' ? [1, 2, 3] : [0, 1, 2, 3];
+  for (const offset of offsets) {
+    const tile = firstCopy + offset;
+    if (!used.has(tile)) {
+      used.add(tile);
+      return tile;
+    }
+  }
+
+  return firstCopy + 3;
+}
+
 export function createTile(code: TileCode): Tile {
-  const base = baseTileCode(code);
-  const suit = base[0] as TileSuit;
-  const rank = Number(base[1]) as TileRank | HonorRank;
-  return { code, suit, rank, red: isRedFive(code) };
+  return parseTileCodes([code])[0];
 }
 
 export function tileFromParts(suit: NumberSuit, rank: TileRank, red?: boolean): Tile;
@@ -207,8 +276,9 @@ export function tileFromParts(suit: TileSuit, rank: TileRank | HonorRank, red = 
 }
 
 export function getTileMeta(tileOrCode: Tile | TileCode): TileMeta {
-  const code = typeof tileOrCode === 'string' ? tileOrCode : tileOrCode.code;
+  const code = typeof tileOrCode === 'number' ? tileToCode(tileOrCode) : tileOrCode;
   const baseCode = baseTileCode(code);
+  const tile34 = tileCodeTo34(code);
   const suit = baseCode[0] as TileSuit;
   const rank = Number(baseCode[1]) as TileRank | HonorRank;
   const red = isRedFive(code);
@@ -218,6 +288,7 @@ export function getTileMeta(tileOrCode: Tile | TileCode): TileMeta {
     return {
       code,
       baseCode,
+      tile34,
       suit,
       rank,
       red,
@@ -233,6 +304,7 @@ export function getTileMeta(tileOrCode: Tile | TileCode): TileMeta {
   return {
     code,
     baseCode,
+    tile34,
     suit,
     rank,
     red,
@@ -252,7 +324,7 @@ export function tileAssetFilename(tileOrCode: Tile | TileCode): string {
 }
 
 export function tileSortKey(tileOrCode: Tile | TileCode): number {
-  const code = typeof tileOrCode === 'string' ? tileOrCode : tileOrCode.code;
+  const code = typeof tileOrCode === 'number' ? tileToCode(tileOrCode) : tileOrCode;
   const base = baseTileCode(code);
   const suit = base[0] as TileSuit;
   const rank = Number(base[1]);
@@ -267,22 +339,35 @@ export function sortTiles<T extends Tile>(tiles: readonly T[]): T[] {
 export function countPhysicalTiles(tiles: readonly Tile[]): Map<BaseTileCode, number> {
   const counts = new Map<BaseTileCode, number>();
   for (const tile of tiles) {
-    const base = baseTileCode(tile.code);
+    const base = baseTileCode(tile);
     counts.set(base, (counts.get(base) ?? 0) + 1);
   }
   return counts;
 }
 
 export function countRedDora(tiles: readonly Tile[]): number {
-  return tiles.filter((tile) => tile.red).length;
+  return tiles.filter((tile) => AKA_DORAS.has(tile)).length;
 }
 
 export function parseTileCodes(codes: readonly TileCode[]): Tile[] {
-  return codes.map(createTile);
+  const usedByBase = new Map<BaseTileCode, Set<number>>();
+  return codes.map((code) => allocateTile136(code, usedByBase));
+}
+
+export function tilesTo34Array(tiles: Iterable<Tile>): number[] {
+  return TilesConverter.to_34_array(tiles);
 }
 
 export function tileToDisplay(tile: Tile): string {
   return getTileMeta(tile).shortLabel;
+}
+
+export function tileSuit(tile: Tile): TileSuit {
+  return getTileMeta(tile).suit;
+}
+
+export function tileRank(tile: Tile): TileRank | HonorRank {
+  return getTileMeta(tile).rank;
 }
 
 export function windToHonorCode(wind: Wind): HonorTileCode {

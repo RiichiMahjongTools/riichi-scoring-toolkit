@@ -11,13 +11,12 @@
     "lint": "tsc -b --pretty false"
   },
   "dependencies": {
-    "@kobalab/majiang-core": "^1.4.1",
     "@vitejs/plugin-react": "^4.3.4",
     "lucide-react": "^0.468.0",
+    "mahjong-ts": "workspace:*",
     "onnxruntime-web": "^1.27.0",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "riichi-mahjong": "^1.0.6"
+    "react-dom": "^18.3.1"
   },
   "devDependencies": {
     "@types/react": "^18.3.18",

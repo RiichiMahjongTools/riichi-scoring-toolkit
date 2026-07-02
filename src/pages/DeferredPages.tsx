@@ -31,7 +31,7 @@ import {
 } from '../components';
 import {
   baseTileCode,
-  calculatePoint,
+  calculateScoreCost,
   getLegalFuOptions,
   isTileCode,
   tileLabel,
@@ -112,10 +112,16 @@ function formatPaymentSummary(params: {
   winMethod: WinMethod;
   honba: number;
 }) {
-  const result = calculatePoint(params);
-  if (params.winMethod === 'ron') return formatPoints(result.payments.ron);
-  if (params.isDealer) return `${(result.payments.tsumoAllPays ?? 0).toLocaleString('zh-CN')} all`;
-  return `${(result.payments.tsumoNonDealerPays ?? 0).toLocaleString('zh-CN')} / ${(result.payments.tsumoDealerPays ?? 0).toLocaleString('zh-CN')}`;
+  const result = calculateScoreCost({
+    han: params.han,
+    fu: params.fu,
+    is_dealer: params.isDealer,
+    is_tsumo: params.winMethod === 'tsumo',
+    tsumi_number: params.honba,
+  });
+  if (params.winMethod === 'ron') return formatPoints(result.cost.main);
+  if (params.isDealer) return `${result.cost.main.toLocaleString('zh-CN')} all`;
+  return `${result.cost.additional.toLocaleString('zh-CN')} / ${result.cost.main.toLocaleString('zh-CN')}`;
 }
 
 async function copyLocalText(text: string, onDone: (message: string) => void) {
@@ -197,7 +203,7 @@ export function LegacyScorePage() {
   const safeFu = legalFu.includes(fu) ? fu : legalFu[0] ?? 30;
   const canCalculate = totalHan > 0;
   const result = canCalculate
-    ? calculatePoint({ han: totalHan, fu: safeFu, isDealer, winMethod, honba })
+    ? calculateScoreCost({ han: totalHan, fu: safeFu, is_dealer: isDealer, is_tsumo: winMethod === 'tsumo', tsumi_number: honba })
     : null;
 
   const toggleYaku = (id: string) => {
@@ -285,8 +291,8 @@ export function LegacyScorePage() {
 
       <div className="mj-score-hero">
         <span>估算点数</span>
-        <strong>{result ? (result.payments.totalGain).toLocaleString('zh-CN') : '-'}</strong>
-        <small>{canCalculate ? `${totalHan >= 13 ? result?.limitLabel ?? '役满' : `${totalHan}番${safeFu}符`} · ${isDealer ? '亲家' : '闲家'}${winMethod === 'ron' ? '荣和' : '自摸'}` : '请选择至少一个古役'}</small>
+        <strong>{result ? result.cost.total.toLocaleString('zh-CN') : '-'}</strong>
+        <small>{canCalculate ? `${totalHan >= 13 ? result?.yaku_level_label ?? '役满' : `${totalHan}番${safeFu}符`} · ${isDealer ? '亲家' : '闲家'}${winMethod === 'ron' ? '荣和' : '自摸'}` : '请选择至少一个古役'}</small>
       </div>
 
       {result ? (
@@ -296,7 +302,7 @@ export function LegacyScorePage() {
               id: 'payment',
               label: winMethod === 'ron' ? '荣和支付' : '自摸支付',
               value: formatPaymentSummary({ han: totalHan, fu: safeFu, isDealer, winMethod, honba }),
-              caption: result.limitLabel ?? '普通手',
+              caption: result.yaku_level_label ?? '普通手',
               tone: 'success',
             },
           ]}
@@ -335,7 +341,7 @@ export function TableRecordsPage() {
   const dealerId = SEAT_IDS[dealerIndex % 4];
   const legalFu = getLegalFuOptions(han);
   const safeFu = legalFu.includes(fu) ? fu : legalFu[0] ?? 30;
-  const point = calculatePoint({ han, fu: safeFu, isDealer: winner === dealerId, winMethod: outcome === 'tsumo' ? 'tsumo' : 'ron', honba });
+  const point = calculateScoreCost({ han, fu: safeFu, is_dealer: winner === dealerId, is_tsumo: outcome === 'tsumo', tsumi_number: honba });
   const totalScore = players.reduce((sum, player) => sum + player.score, 0);
 
   const snapshot = () => ({ players, dealerIndex, roundIndex, honba });
@@ -385,7 +391,7 @@ export function TableRecordsPage() {
 
     if (outcome === 'ron') {
       const effectiveLoser = loser === winner ? SEAT_IDS.find((seat) => seat !== winner) ?? loser : loser;
-      const payment = point.payments.ron ?? 0;
+      const payment = point.cost.main;
       setPlayers((value) => updatePlayerScore(updatePlayerScore(value, winner, payment), effectiveLoser, -payment));
       pushHistory(`${SEAT_LABELS[winner]}家 荣和 ${SEAT_LABELS[effectiveLoser]}家`, `+${payment}`, before);
       advanceRound(winner);
@@ -394,11 +400,11 @@ export function TableRecordsPage() {
 
     const nextPlayers = players.reduce((current, player) => {
       if (player.id === winner) return current;
-      const loss = winner === dealerId ? point.payments.tsumoAllPays ?? 0 : player.id === dealerId ? point.payments.tsumoDealerPays ?? 0 : point.payments.tsumoNonDealerPays ?? 0;
+      const loss = winner === dealerId ? point.cost.main : player.id === dealerId ? point.cost.main : point.cost.additional;
       return updatePlayerScore(current, player.id, -loss);
     }, players);
-    setPlayers(updatePlayerScore(nextPlayers, winner, point.payments.totalGain));
-    pushHistory(`${SEAT_LABELS[winner]}家 自摸`, `+${point.payments.totalGain}`, before);
+    setPlayers(updatePlayerScore(nextPlayers, winner, point.cost.total));
+    pushHistory(`${SEAT_LABELS[winner]}家 自摸`, `+${point.cost.total}`, before);
     advanceRound(winner);
   };
 

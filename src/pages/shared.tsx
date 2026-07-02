@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 
 import type { PageId } from './pageModel';
-import type { FuValue, HanFuTableRow, PointResult, ScoreMode, Tile, TileCode, Wind } from '../domain';
+import { tileToCode, type FuValue, type HanFuTableRow, type PointResult, type ScoreMode, type Tile, type TileCode, type Wind } from '../domain';
 
 export interface PageProps {
   navigate: (page: PageId) => void;
@@ -22,7 +22,7 @@ export const MODE_LABELS: Record<ScoreMode, string> = {
 export const FU_OPTIONS: FuValue[] = [20, 25, 30, 40, 50, 60, 70, 80, 90, 100, 110];
 
 export function tileCodes(tiles: readonly Tile[]): TileCode[] {
-  return tiles.map((tile) => tile.code);
+  return tiles.map(tileToCode);
 }
 
 export function formatHan(value: number | string): string {
@@ -37,8 +37,8 @@ export function formatPoints(value: number | undefined): string {
   return value === undefined ? '-' : `${value.toLocaleString('zh-CN')} 点`;
 }
 
-export function formatLimit(result: Pick<PointResult, 'limitLabel'> | { limitLabel?: string | null }): string {
-  return result.limitLabel ?? '普通手';
+export function formatLimit(result: Pick<PointResult, 'yaku_level_label'> | { yaku_level_label?: string | null }): string {
+  return result.yaku_level_label ?? '普通手';
 }
 
 export function formatWinMethod(value: 'ron' | 'tsumo'): string {
@@ -47,7 +47,7 @@ export function formatWinMethod(value: 'ron' | 'tsumo'): string {
 
 export function formatTableLimit(row: HanFuTableRow): ReactNode {
   if (!row.legal) return '通常不成立';
-  return row.limitLabel ?? '普通';
+  return row.yaku_level_label ?? '普通';
 }
 
 export function formatComebackAnswer(value: FuValue | 'impossible' | undefined): string {

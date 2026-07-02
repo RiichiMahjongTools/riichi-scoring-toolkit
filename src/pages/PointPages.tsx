@@ -12,7 +12,7 @@ import {
 import {
   STANDARD_HAN_VALUES,
   buildHanFuTableRow,
-  calculatePoint,
+  calculateScoreCost,
   getLegalFuOptions,
   type FuValue,
   type HanValue,
@@ -88,10 +88,10 @@ export function HanFuCalculatorPage() {
 
   const results = useMemo(
     () => ({
-      dealerRon: calculatePoint({ han, fu, honba: 0, isDealer: true, winMethod: 'ron' }),
-      dealerTsumo: calculatePoint({ han, fu, honba: 0, isDealer: true, winMethod: 'tsumo' }),
-      childRon: calculatePoint({ han, fu, honba: 0, isDealer: false, winMethod: 'ron' }),
-      childTsumo: calculatePoint({ han, fu, honba: 0, isDealer: false, winMethod: 'tsumo' }),
+      dealerRon: calculateScoreCost({ han, fu, is_dealer: true, is_tsumo: false }),
+      dealerTsumo: calculateScoreCost({ han, fu, is_dealer: true, is_tsumo: true }),
+      childRon: calculateScoreCost({ han, fu, is_dealer: false, is_tsumo: false }),
+      childTsumo: calculateScoreCost({ han, fu, is_dealer: false, is_tsumo: true }),
     }),
     [fu, han],
   );
@@ -126,15 +126,15 @@ export function HanFuCalculatorPage() {
       </SectionCard>
 
       <div className="mj-hanfu-result-stack">
-        <HanFuResultCard label="亲家自摸" meta={`${han}番${fu}符`} value={`${results.dealerTsumo.payments.tsumoAllPays ?? 0} all`} tone="green" />
-        <HanFuResultCard label="亲家荣和" meta={`${han}番${fu}符`} value={String(results.dealerRon.payments.ron ?? 0)} tone="red" />
+        <HanFuResultCard label="亲家自摸" meta={`${han}番${fu}符`} value={`${results.dealerTsumo.cost.main} all`} tone="green" />
+        <HanFuResultCard label="亲家荣和" meta={`${han}番${fu}符`} value={String(results.dealerRon.cost.main)} tone="red" />
         <HanFuResultCard
           label="闲家自摸"
           meta={`${han}番${fu}符`}
-          value={`${results.childTsumo.payments.tsumoNonDealerPays ?? 0} / ${results.childTsumo.payments.tsumoDealerPays ?? 0}`}
+          value={`${results.childTsumo.cost.additional} / ${results.childTsumo.cost.main}`}
           tone="gold"
         />
-        <HanFuResultCard label="闲家荣和" meta={`${han}番${fu}符`} value={String(results.childRon.payments.ron ?? 0)} tone="green" />
+        <HanFuResultCard label="闲家荣和" meta={`${han}番${fu}符`} value={String(results.childRon.cost.main)} tone="green" />
       </div>
     </div>
   );

@@ -53,7 +53,7 @@ function detection(tile: RecognitionDetection['tile'], x: number, confidence = 0
   };
 }
 
-describe('tile recognition adapter', () => {
+describe('tile recognition pipeline', () => {
   it('maps fixed YOLO labels to local tile codes, including red fives', () => {
     expect(yoloLabelToTileCode('0m')).toBe('m5r');
     expect(yoloLabelToTileCode('0p')).toBe('p5r');
