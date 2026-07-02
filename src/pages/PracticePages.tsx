@@ -292,8 +292,6 @@ export function FuPracticePage() {
                 type="button"
                 onClick={() => submit(fu)}
               >
-                {isWrong ? <X aria-hidden="true" /> : null}
-                {isCorrect ? <Check aria-hidden="true" /> : null}
                 {fu}符
               </button>
             );
@@ -302,7 +300,7 @@ export function FuPracticePage() {
       </SectionCard>
 
       {feedback ? (
-        <section className="mj-fu-breakdown-panel">
+        <section className={feedback.correct ? 'mj-fu-breakdown-panel mj-fu-breakdown-panel--correct' : 'mj-fu-breakdown-panel mj-fu-breakdown-panel--wrong'}>
           <h2>
             {feedback.correct ? <Check aria-hidden="true" /> : <X aria-hidden="true" />}
             {feedback.correct ? '回答正确' : `回答错误 · 标准答案 ${feedback.correctAnswer} 符`}
@@ -315,16 +313,11 @@ export function FuPracticePage() {
             rows={rows}
             rowKey={(row) => String(row.id)}
           />
-          <div className="mj-button-row mj-button-row--two">
-            <ActionButton icon={<BookOpen aria-hidden="true" />} variant="ghost" onClick={() => {
-              window.location.hash = '#/help-fu';
-            }}>
-              符数帮助
-            </ActionButton>
-            <ActionButton icon={<Sparkles aria-hidden="true" />} onClick={() => nextPracticeSeed(setSeed, resetQuestion)}>
-              下一题
-            </ActionButton>
-          </div>
+          <ActionButton fullWidth icon={<BookOpen aria-hidden="true" />} variant="ghost" onClick={() => {
+            window.location.hash = '#/help-fu';
+          }}>
+            符数帮助
+          </ActionButton>
         </section>
       ) : null}
       <RandomQuestionButton onClick={randomQuestion} />

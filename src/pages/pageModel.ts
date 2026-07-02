@@ -4,7 +4,6 @@ import {
   GraduationCap,
   House,
   HelpCircle,
-  Keyboard,
   Layers,
   MessageCircle,
   NotebookTabs,
@@ -152,14 +151,6 @@ export const NAV_ENTRIES: NavEntry[] = [
     subtitle: '导入照片后用牌键盘确认最终牌序',
     status: 'ready',
     icon: ScanLine,
-  },
-  {
-    id: 'tile-keyboard-demo',
-    group: '记录与识别',
-    title: '牌输入键盘',
-    subtitle: '可录入、删除并复制标准牌序',
-    status: 'ready',
-    icon: Keyboard,
   },
 ];
 

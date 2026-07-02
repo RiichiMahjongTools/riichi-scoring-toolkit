@@ -82,15 +82,15 @@
 .mj-top-nav__back-ghost {
   display: inline-grid;
   place-items: center;
-  width: 22px;
-  height: 22px;
+  width: 38px;
+  height: 38px;
   color: var(--mj-green);
 }
 
 .mj-top-nav__back-ghost svg {
-  width: 22px;
-  height: 22px;
-  stroke-width: 2.8;
+  width: 18px;
+  height: 18px;
+  stroke-width: 2.4;
 }
 
 .mj-section-card {

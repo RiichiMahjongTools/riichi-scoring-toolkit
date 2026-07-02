@@ -1406,6 +1406,7 @@
   min-height: 46px;
   border-radius: 8px;
   font-size: 13px;
+  white-space: nowrap;
 }
 
 .mj-fu-choice,
@@ -1423,18 +1424,18 @@
   font-weight: 900;
 }
 
-.mj-fu-choice svg {
-  width: 16px;
-  height: 16px;
-}
-
 .mj-fu-choice--wrong,
 .mj-rank-choice--wrong {
   border-color: var(--mj-red);
   color: var(--mj-red);
 }
 
-.mj-fu-choice--correct,
+.mj-fu-choice--correct {
+  border-color: var(--mj-green);
+  background: var(--mj-green-soft);
+  color: var(--mj-green);
+}
+
 .mj-rank-choice--selected:not(.mj-rank-choice--wrong) {
   border-color: var(--mj-gold);
   background: var(--mj-gold-soft);
@@ -1442,12 +1443,25 @@
 }
 
 .mj-fu-breakdown-panel {
+  --mj-fu-feedback-accent: var(--mj-red);
+  --mj-fu-feedback-bg: var(--mj-red-soft);
+
   display: grid;
   gap: 12px;
   padding: 14px;
-  border: 2px solid var(--mj-red);
+  border: 2px solid var(--mj-fu-feedback-accent);
   border-radius: 18px;
-  background: var(--mj-red-soft);
+  background: var(--mj-fu-feedback-bg);
+}
+
+.mj-fu-breakdown-panel--correct {
+  --mj-fu-feedback-accent: var(--mj-green);
+  --mj-fu-feedback-bg: var(--mj-green-soft);
+}
+
+.mj-fu-breakdown-panel--wrong {
+  --mj-fu-feedback-accent: var(--mj-red);
+  --mj-fu-feedback-bg: var(--mj-red-soft);
 }
 
 .mj-fu-breakdown-panel h2,
@@ -1461,7 +1475,7 @@
 }
 
 .mj-fu-breakdown-panel h2 {
-  color: var(--mj-red);
+  color: var(--mj-fu-feedback-accent);
 }
 
 .mj-fu-breakdown-panel h2 svg,
@@ -1483,7 +1497,7 @@
 
 .mj-fu-breakdown-panel .mj-data-table th {
   padding: 11px 12px;
-  background: var(--mj-red);
+  background: var(--mj-fu-feedback-accent);
   color: #fff;
   font-size: 13px;
 }
@@ -1496,19 +1510,19 @@
 }
 
 .mj-fu-breakdown-panel .mj-data-table tbody tr:nth-child(even) td {
-  background: color-mix(in srgb, var(--mj-red-soft) 70%, var(--mj-surface));
+  background: color-mix(in srgb, var(--mj-fu-feedback-bg) 70%, var(--mj-surface));
 }
 
 .mj-fu-breakdown-panel .mj-data-table tbody tr:last-child td {
-  background: var(--mj-red);
+  background: var(--mj-fu-feedback-accent);
   color: #fff;
   font-weight: 900;
 }
 
 .mj-fu-breakdown-panel .mj-action-button--ghost {
-  border-color: var(--mj-red);
+  border-color: var(--mj-fu-feedback-accent);
   background: var(--mj-surface);
-  color: var(--mj-red);
+  color: var(--mj-fu-feedback-accent);
 }
 
 .mj-point-digit-grid {
