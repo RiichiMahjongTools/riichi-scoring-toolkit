@@ -30,6 +30,7 @@ export interface FuPracticeQuestion {
 export interface PointPracticeQuestion {
   id: string;
   handTiles: Tile[];
+  handGroups: readonly PointPracticeHandGroup[];
   roundWind: Wind;
   seatWind: Wind;
   winMethod: WinMethod;
@@ -38,6 +39,16 @@ export interface PointPracticeQuestion {
   noYaku: boolean;
   answerTotalPoints: number;
   breakdown: string[];
+}
+
+export type PointPracticeHandGroupKind = 'sequence' | 'triplet' | 'pair' | 'chi' | 'pon' | 'openKan' | 'closedKan';
+
+export interface PointPracticeHandGroup {
+  kind: PointPracticeHandGroupKind;
+  tiles: readonly TileCode[];
+  calledIndex?: number;
+  backIndexes?: readonly number[];
+  winningIndex?: number;
 }
 
 export interface ComebackPracticeQuestion {
@@ -84,10 +95,75 @@ const FU_HANDS: Record<string, TileCode[]> = {
   'fu-tsumo-open-triplet': ['m1', 'm1', 'm1', 'p2', 'p3', 'p4', 'p7', 'p8', 'p9', 's4', 's5', 's6', 'z2', 'z2'],
 };
 
-const POINT_HAND: TileCode[] = ['m2', 'm3', 'm4', 'm3', 'm4', 'm5', 'p2', 'p3', 'p4', 's6', 's7', 's8', 'p5', 'p5'];
+const POINT_NO_YAKU_GROUPS: readonly PointPracticeHandGroup[] = [
+  { kind: 'sequence', tiles: ['m1', 'm2', 'm3'] },
+  { kind: 'sequence', tiles: ['p1', 'p2', 'p3'] },
+  { kind: 'sequence', tiles: ['s7', 's8', 's9'] },
+  { kind: 'sequence', tiles: ['m7', 'm8', 'm9'], winningIndex: 2 },
+  { kind: 'pair', tiles: ['z1', 'z1'] },
+];
+
+const POINT_PRACTICE_VARIANTS = [
+  {
+    han: 1,
+    fu: 30,
+    seatWind: 'north' as const,
+    winMethod: 'ron' as const,
+    handGroups: [
+      { kind: 'sequence', tiles: ['m2', 'm3', 'm4'] },
+      { kind: 'sequence', tiles: ['m3', 'm4', 'm5'] },
+      { kind: 'sequence', tiles: ['p2', 'p3', 'p4'] },
+      { kind: 'sequence', tiles: ['s6', 's7', 's8'] },
+      { kind: 'pair', tiles: ['p5', 'p5'], winningIndex: 1 },
+    ] satisfies readonly PointPracticeHandGroup[],
+  },
+  {
+    han: 2,
+    fu: 30,
+    seatWind: 'south' as const,
+    winMethod: 'ron' as const,
+    handGroups: [
+      { kind: 'sequence', tiles: ['m7', 'm8', 'm9'] },
+      { kind: 'sequence', tiles: ['p3', 'p4', 'p5'] },
+      { kind: 'pair', tiles: ['z5', 'z5'] },
+      { kind: 'chi', tiles: ['s3', 's4', 's5'], calledIndex: 0 },
+      { kind: 'sequence', tiles: ['m1', 'm2', 'm3'], winningIndex: 2 },
+    ] satisfies readonly PointPracticeHandGroup[],
+  },
+  {
+    han: 2,
+    fu: 40,
+    seatWind: 'east' as const,
+    winMethod: 'tsumo' as const,
+    handGroups: [
+      { kind: 'sequence', tiles: ['m3', 'm4', 'm5'] },
+      { kind: 'sequence', tiles: ['p2', 'p3', 'p4'] },
+      { kind: 'sequence', tiles: ['s6', 's7', 's8'] },
+      { kind: 'pair', tiles: ['p5', 'p5'], winningIndex: 1 },
+      { kind: 'pon', tiles: ['z2', 'z2', 'z2'], calledIndex: 0 },
+    ] satisfies readonly PointPracticeHandGroup[],
+  },
+  {
+    han: 3,
+    fu: 40,
+    seatWind: 'west' as const,
+    winMethod: 'tsumo' as const,
+    handGroups: [
+      { kind: 'sequence', tiles: ['m2', 'm3', 'm4'] },
+      { kind: 'triplet', tiles: ['p2', 'p2', 'p2'] },
+      { kind: 'sequence', tiles: ['s6', 's7', 's8'] },
+      { kind: 'pair', tiles: ['p5', 'p5'], winningIndex: 1 },
+      { kind: 'closedKan', tiles: ['z3', 'z3', 'z3', 'z3'], backIndexes: [0, 3] },
+    ] satisfies readonly PointPracticeHandGroup[],
+  },
+] as const;
 
 function pick<T>(items: readonly T[], seed: number): T {
   return items[Math.abs(seed) % items.length];
+}
+
+function tilesFromPointGroups(groups: readonly PointPracticeHandGroup[]): Tile[] {
+  return parseTileCodes(groups.flatMap((group) => group.tiles));
 }
 
 function ranksFromEffectiveTiles(question: ChinituWaitQuestion): number[] {
@@ -154,7 +230,8 @@ export function generatePointPracticeQuestion(seed = 0): PointPracticeQuestion {
   if (seed % 5 === 4) {
     return {
       id: 'point-no-yaku',
-      handTiles: parseTileCodes(POINT_HAND),
+      handTiles: tilesFromPointGroups(POINT_NO_YAKU_GROUPS),
+      handGroups: POINT_NO_YAKU_GROUPS,
       roundWind: 'south',
       seatWind: 'north',
       winMethod: 'ron',
@@ -166,12 +243,7 @@ export function generatePointPracticeQuestion(seed = 0): PointPracticeQuestion {
     };
   }
 
-  const variants = [
-    { han: 1, fu: 30, seatWind: 'north' as const, winMethod: 'ron' as const },
-    { han: 2, fu: 40, seatWind: 'east' as const, winMethod: 'tsumo' as const },
-    { han: 3, fu: 40, seatWind: 'west' as const, winMethod: 'tsumo' as const },
-  ];
-  const variant = pick(variants, seed);
+  const variant = pick(POINT_PRACTICE_VARIANTS, seed);
   const point = calculatePoint({
     han: variant.han,
     fu: variant.fu,
@@ -181,7 +253,8 @@ export function generatePointPracticeQuestion(seed = 0): PointPracticeQuestion {
 
   return {
     id: `point-${variant.han}-${variant.fu}-${variant.seatWind}-${variant.winMethod}`,
-    handTiles: parseTileCodes(POINT_HAND),
+    handTiles: tilesFromPointGroups(variant.handGroups),
+    handGroups: variant.handGroups,
     roundWind: 'south',
     seatWind: variant.seatWind,
     winMethod: variant.winMethod,

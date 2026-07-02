@@ -24,6 +24,8 @@ import {
   generatePointPracticeQuestion,
   getLegalRonFuOptions,
   type FuValue,
+  type PointPracticeHandGroup,
+  type PointPracticeQuestion,
   type PracticeFeedback,
 } from '../domain';
 import { WIND_LABELS, formatComebackAnswer, formatPoints, formatWinMethod } from './shared';
@@ -300,6 +302,111 @@ function makePointLookupRows(han: number) {
   });
 }
 
+function isOpenPointGroup(group: PointPracticeHandGroup): boolean {
+  return group.kind === 'chi' || group.kind === 'pon' || group.kind === 'openKan';
+}
+
+function pointWinningTile(question: PointPracticeQuestion): string | null {
+  for (const group of question.handGroups) {
+    if (group.winningIndex !== undefined) return group.tiles[group.winningIndex] ?? null;
+  }
+  return null;
+}
+
+function PointPracticeTile({
+  code,
+  back = false,
+  sideways = false,
+}: {
+  code?: string;
+  back?: boolean;
+  sideways?: boolean;
+}) {
+  return (
+    <span className={sideways ? 'mj-point-hand-tile-slot mj-point-hand-tile-slot--sideways' : 'mj-point-hand-tile-slot'}>
+      {back ? (
+        <span aria-label="牌背" className="mj-tile mj-tile--sm mj-point-hand-tile-back" />
+      ) : code ? (
+        <MahjongTile className={sideways ? 'mj-point-hand-tile--sideways' : undefined} code={code} size="sm" />
+      ) : null}
+    </span>
+  );
+}
+
+function PointPracticeHandMeld({
+  group,
+  groupIndex,
+  winMethod,
+}: {
+  group: PointPracticeHandGroup;
+  groupIndex: number;
+  winMethod: PointPracticeQuestion['winMethod'];
+}) {
+  const isOpen = isOpenPointGroup(group);
+  const visibleTiles = group.tiles
+    .map((tile, tileIndex) => ({ tile, tileIndex }))
+    .filter(({ tileIndex }) => !(winMethod === 'tsumo' && tileIndex === group.winningIndex));
+
+  return (
+    <div
+      className={[
+        'mj-point-hand-meld',
+        isOpen && 'mj-point-hand-meld--open',
+        (group.kind === 'openKan' || group.kind === 'closedKan') && 'mj-point-hand-meld--kan',
+        group.kind === 'closedKan' && 'mj-point-hand-meld--closed-kan',
+        group.kind === 'pair' && 'mj-point-hand-meld--pair',
+      ].filter(Boolean).join(' ')}
+    >
+      <div className="mj-point-hand-meld__tiles">
+        {visibleTiles.map(({ tile, tileIndex }) => {
+          const isSideways = (winMethod === 'ron' && tileIndex === group.winningIndex) || tileIndex === group.calledIndex;
+          const isBack = group.backIndexes?.includes(tileIndex) ?? false;
+          return (
+            <PointPracticeTile
+              key={`${groupIndex}-${tile}-${tileIndex}`}
+              code={tile}
+              back={isBack}
+              sideways={isSideways}
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function PointPracticeHandScene({ question }: { question: PointPracticeQuestion }) {
+  const winningTile = pointWinningTile(question);
+  const concealedGroups = question.handGroups.filter((group) => !isOpenPointGroup(group));
+  const openGroups = question.handGroups.filter(isOpenPointGroup);
+
+  return (
+    <div className="mj-point-hand-scene" aria-label="题面牌姿">
+      {question.winMethod === 'tsumo' && winningTile ? (
+        <div className="mj-point-hand-scene__draw">
+          <PointPracticeTile code={winningTile} sideways />
+        </div>
+      ) : null}
+
+      <div className="mj-point-hand-scene__groups" aria-label="门前牌">
+        {concealedGroups.map((group, index) => (
+          <PointPracticeHandMeld key={`concealed-${index}`} group={group} groupIndex={index} winMethod={question.winMethod} />
+        ))}
+      </div>
+
+      {openGroups.length > 0 ? (
+        <div className="mj-point-hand-scene__open">
+          <div className="mj-point-hand-scene__groups mj-point-hand-scene__groups--open" aria-label="副露牌">
+            {openGroups.map((group, index) => (
+              <PointPracticeHandMeld key={`open-${index}`} group={group} groupIndex={concealedGroups.length + index} winMethod={question.winMethod} />
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function PointPracticePage() {
   const [seed, setSeed] = useState(0);
   const [draft, setDraft] = useState('');
@@ -325,7 +432,8 @@ export function PointPracticePage() {
         ]}
       />
 
-      <SectionCard title="题目" description="根据番符、亲闲与和牌方式填写总获得点数。">
+      <SectionCard aria-label="题面手牌" className="mj-practice-hand-card mj-point-hand-card">
+        <PointPracticeHandScene question={question} />
         <div className="mj-practice-hand-meta">
           {question.noYaku ? <Chip selected tone="danger">无役</Chip> : <Chip selected>{question.han}番{question.fu}符</Chip>}
           <Chip selected>{question.seatWind === 'east' ? '亲家' : '闲家'}</Chip>
