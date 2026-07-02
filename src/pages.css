@@ -40,8 +40,28 @@
   gap: 8px;
 }
 
+.mj-home-page {
+  gap: 0;
+}
+
+.mj-home-group.mj-section-card {
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.mj-home-group + .mj-home-group {
+  border-top: 1px solid var(--mj-line);
+}
+
 .mj-home-group .mj-section-card__header {
-  padding-bottom: 8px;
+  padding: 16px 0 10px;
+}
+
+.mj-home-group .mj-section-card__body {
+  padding: 0 0 16px;
 }
 
 .mj-home-entry-grid {
@@ -56,6 +76,7 @@
 }
 
 .mj-contact-button {
+  margin-top: 14px;
   border-color: var(--mj-line);
   background: color-mix(in srgb, var(--mj-green-soft) 28%, var(--mj-surface));
 }
@@ -94,6 +115,7 @@
 .mj-home-entry-grid .mj-feature-card--compact {
   gap: 8px;
   padding: 10px;
+  background: var(--mj-surface);
 }
 
 .mj-home-entry-grid .mj-feature-card--compact .mj-feature-card__content strong {

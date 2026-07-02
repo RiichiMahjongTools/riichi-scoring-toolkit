@@ -11,7 +11,7 @@ export function HomePage({ navigate }: PageProps) {
   const [contactOpen, setContactOpen] = useState(() => window.location.hash.includes('contact=1'));
 
   return (
-    <div className="mj-page-stack">
+    <div className="mj-page-stack mj-home-page">
       {GROUPS.map((group) => (
         <SectionCard key={group} className="mj-home-group" title={group}>
           <div className="mj-home-entry-grid">
