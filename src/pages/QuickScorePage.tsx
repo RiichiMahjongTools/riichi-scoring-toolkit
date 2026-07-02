@@ -1,5 +1,5 @@
 import { AlertCircle, Camera, Copy, Minus, Plus, RotateCcw, Share2, SlidersHorizontal, Sparkles, Trash2 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import {
   ActionButton,
@@ -82,6 +82,17 @@ function toTileCodes(values: string[]): TileCode[] {
   return values.filter(isTileCode);
 }
 
+export function parseQuickScoreTileImport(hash: string): TileCode[] {
+  const queryIndex = hash.indexOf('?');
+  if (queryIndex === -1) return [];
+
+  const params = new URLSearchParams(hash.slice(queryIndex + 1));
+  const rawTiles = params.get('tiles');
+  if (!rawTiles) return [];
+
+  return rawTiles.split(/[,\s]+/).filter(isTileCode).slice(0, 14);
+}
+
 function hasFourPhysicalCopies(tile: string, currentTiles: string[]) {
   if (!isTileCode(tile)) return true;
   const base = baseTileCode(tile);
@@ -142,9 +153,12 @@ async function copyResult(text: string, onDone: (message: string) => void) {
 }
 
 export function QuickScorePage() {
+  const initialImportedTiles = parseQuickScoreTileImport(window.location.hash);
   const [mode, setMode] = useState<ScoreMode>('yonma');
-  const [handTiles, setHandTiles] = useState<TileCode[]>([]);
-  const [winningTileIndex, setWinningTileIndex] = useState<number | null>(null);
+  const [handTiles, setHandTiles] = useState<TileCode[]>(initialImportedTiles);
+  const [winningTileIndex, setWinningTileIndex] = useState<number | null>(
+    initialImportedTiles.length > 0 ? initialImportedTiles.length - 1 : null,
+  );
   const [melds, setMelds] = useState<MeldInput[]>([]);
   const [meldKind, setMeldKind] = useState<MeldKind>('chi');
   const [meldDraftTiles, setMeldDraftTiles] = useState<TileCode[]>([]);
@@ -165,6 +179,20 @@ export function QuickScorePage() {
     () => moveTileToEnd(handTiles, selectedHandWinningIndex),
     [handTiles, selectedHandWinningIndex],
   );
+
+  useEffect(() => {
+    const applyImportedTiles = () => {
+      const importedTiles = parseQuickScoreTileImport(window.location.hash);
+      if (importedTiles.length === 0) return;
+      setHandTiles(importedTiles);
+      setWinningTileIndex(importedTiles.length - 1);
+      setCopyMessage('已带入识别手牌，请确认最后一张和牌');
+    };
+
+    applyImportedTiles();
+    window.addEventListener('hashchange', applyImportedTiles);
+    return () => window.removeEventListener('hashchange', applyImportedTiles);
+  }, []);
 
   const computation = useMemo<QuickComputation>(() => {
     if (scoringHandTiles.length === 0) return { kind: 'empty' };

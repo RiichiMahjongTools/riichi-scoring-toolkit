@@ -8,6 +8,7 @@ import {
   Home,
   Image as ImageIcon,
   Keyboard,
+  LoaderCircle,
   RotateCcw,
   SkipForward,
   Sparkles,
@@ -29,7 +30,6 @@ import {
   TileStrip,
 } from '../components';
 import {
-  ALL_TILE_CODES,
   baseTileCode,
   calculatePoint,
   getLegalFuOptions,
@@ -39,12 +39,12 @@ import {
   type TileCode,
   type WinMethod,
 } from '../domain';
+import type { RecognitionDetection } from '../domain/tileRecognition';
 import type { PageProps } from './shared';
 import { formatPoints } from './shared';
 
 const CHAT_SAMPLE_HAND = ['m2', 'm3', 'm4', 'p3', 'p4', 'p5r', 's6', 's7', 's8', 'z1', 'z1', 'z7'];
 const SEAT_IDS = ['east', 'south', 'west', 'north'] as const;
-const RECOGNITION_SAMPLE_HAND: TileCode[] = ['m2', 'm3', 'm4', 'p2', 'p3', 'p4', 'p5', 's6', 's7', 's8', 'z1', 'z1', 'z2', 'z3'];
 type SeatId = (typeof SEAT_IDS)[number];
 type RecordOutcome = 'ron' | 'tsumo' | 'draw' | 'adjust';
 
@@ -101,35 +101,8 @@ function hasFourPhysicalCopies(tile: string, currentTiles: string[]) {
   return currentTiles.filter((value) => isTileCode(value) && baseTileCode(value) === base).length >= 4;
 }
 
-function nearbyTileCandidates(tile: TileCode, index: number): TileCode[] {
-  const base = baseTileCode(tile);
-  const suit = base[0];
-  const rank = Number(base[1]);
-  const candidates: TileCode[] = [];
-  const pushCandidate = (value: string) => {
-    if (isTileCode(value) && !candidates.includes(value)) candidates.push(value);
-  };
-
-  pushCandidate(tile);
-
-  if (suit === 'z') {
-    pushCandidate(`z${Math.max(1, rank - 1)}`);
-    pushCandidate(`z${Math.min(7, rank + 1)}`);
-  } else {
-    pushCandidate(`${suit}${Math.min(9, rank + 1)}`);
-    pushCandidate(`${suit}${Math.max(1, rank - 1)}`);
-  }
-
-  for (let offset = 0; offset < ALL_TILE_CODES.length; offset += 1) {
-    if (candidates.length >= 3) break;
-    pushCandidate(ALL_TILE_CODES[(index + offset) % ALL_TILE_CODES.length]);
-  }
-
-  return candidates.slice(0, 3);
-}
-
-function makeRecognitionCandidates() {
-  return RECOGNITION_SAMPLE_HAND.map((tile, index) => nearbyTileCandidates(tile, index));
+function recognitionTilesToHash(tiles: readonly TileCode[]) {
+  return `#/quick-score?${new URLSearchParams({ tiles: tiles.join(',') }).toString()}`;
 }
 
 function formatPaymentSummary(params: {
@@ -586,26 +559,60 @@ export function TableRecordsPage() {
   );
 }
 
+type RecognitionStatus = 'idle' | 'recognizing' | 'ready' | 'missing' | 'error';
+
+async function fileToDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ''));
+    reader.onerror = () => reject(reader.error ?? new Error('图片读取失败'));
+    reader.readAsDataURL(file);
+  });
+}
+
 export function HandRecognitionPage() {
   const [imageDataUrl, setImageDataUrl] = useState('');
   const [tiles, setTiles] = useState<TileCode[]>([]);
-  const [recognitionCandidates, setRecognitionCandidates] = useState<TileCode[][]>([]);
+  const [recognitionCandidates, setRecognitionCandidates] = useState<RecognitionDetection['candidates'][]>([]);
+  const [detections, setDetections] = useState<RecognitionDetection[]>([]);
+  const [warnings, setWarnings] = useState<string[]>([]);
+  const [status, setStatus] = useState<RecognitionStatus>('idle');
+  const [elapsedMs, setElapsedMs] = useState<number | null>(null);
   const [selectedRecognitionIndex, setSelectedRecognitionIndex] = useState<number | null>(null);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
   const [message, setMessage] = useState('');
 
-  const handleFile = (file: File | undefined) => {
+  const handleFile = async (file: File | undefined) => {
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const candidates = makeRecognitionCandidates();
-      setImageDataUrl(String(reader.result ?? ''));
-      setRecognitionCandidates(candidates);
-      setSelectedRecognitionIndex(null);
-      setTiles(candidates.map((group) => group[0]));
-      setMessage('图片已载入，请用牌键盘确认最终牌序');
-    };
-    reader.readAsDataURL(file);
+    setStatus('recognizing');
+    setMessage('');
+    setWarnings([]);
+    setDetections([]);
+    setRecognitionCandidates([]);
+    setSelectedRecognitionIndex(null);
+
+    try {
+      const recognitionPromise = import('../domain/tileRecognition').then(({ recognizeTilesFromImage }) => recognizeTilesFromImage(file));
+      const [preview, result] = await Promise.all([fileToDataUrl(file), recognitionPromise]);
+      setImageDataUrl(preview);
+      setTiles(result.tiles);
+      setDetections(result.detections);
+      setRecognitionCandidates(result.detections.map((detection) => detection.candidates));
+      setWarnings(result.warnings);
+      setElapsedMs(result.elapsedMs);
+      setStatus(result.modelStatus === 'ready' ? 'ready' : result.modelStatus);
+      setMessage(result.modelStatus === 'ready' ? '识别完成，请确认最终牌序' : '图片已载入，可用牌键盘手动录入');
+    } catch (error) {
+      try {
+        setImageDataUrl(await fileToDataUrl(file));
+      } catch {
+        setImageDataUrl('');
+      }
+      setStatus('error');
+      setElapsedMs(null);
+      setWarnings([error instanceof Error ? error.message : '图片读取失败']);
+      setMessage('图片处理失败，请换一张照片或手动录入');
+    }
   };
 
   const selectedCandidateTiles =
@@ -627,6 +634,42 @@ export function HandRecognitionPage() {
     void copyLocalText(text || '未选择牌', setMessage);
   };
 
+  const removeTile = (index: number) => {
+    setTiles((value) => value.filter((_, currentIndex) => currentIndex !== index));
+    setRecognitionCandidates((value) => value.filter((_, currentIndex) => currentIndex !== index));
+    setSelectedRecognitionIndex(null);
+  };
+
+  const setKeyboardTiles = (value: string[]) => {
+    setTiles(toTileCodes(value));
+    setSelectedRecognitionIndex(null);
+  };
+
+  const importToQuickScore = () => {
+    window.location.hash = recognitionTilesToHash(tiles);
+    window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'smooth' }));
+  };
+
+  const statusAlert = useMemo(() => {
+    if (status === 'recognizing') {
+      return { tone: 'info' as const, title: '正在本地识别', text: '模型加载和推理都在浏览器内完成，照片不会上传。' };
+    }
+    if (status === 'missing') {
+      return { tone: 'warning' as const, title: '模型尚未接入', text: '训练完成后把 ONNX 放到约定路径，本页会自动启用识别。' };
+    }
+    if (status === 'error') {
+      return { tone: 'danger' as const, title: '识别失败', text: '可以换一张照片，或直接打开牌键盘手动录入。' };
+    }
+    if (status === 'ready') {
+      return {
+        tone: 'success' as const,
+        title: '识别完成',
+        text: elapsedMs === null ? '请确认候选和最终牌序。' : `识别用时 ${Math.round(elapsedMs)} ms，请确认候选和最终牌序。`,
+      };
+    }
+    return null;
+  }, [elapsedMs, status]);
+
   return (
     <div className="mj-page-stack mj-hand-recognition-page">
       <div className="mj-button-row mj-button-row--two">
@@ -644,24 +687,68 @@ export function HandRecognitionPage() {
 
       <SectionCard className="mj-recognition-preview-card">
         <div className={imageDataUrl ? 'mj-scan-preview mj-scan-preview--image' : 'mj-scan-preview'}>
-          {imageDataUrl ? <img alt="待确认的手牌照片" src={imageDataUrl} /> : <ScanFrameIcon />}
+          {imageDataUrl ? (
+            <div className="mj-recognition-image-wrap">
+              <img alt="待确认的手牌照片" src={imageDataUrl} />
+              {detections.length > 0 ? (
+                <div className="mj-recognition-box-layer" aria-hidden="true">
+                  {detections.map((detection, index) => (
+                    <span
+                      key={`${detection.tile}-${index}`}
+                      className="mj-recognition-box"
+                      style={{
+                        left: `${detection.box.x * 100}%`,
+                        top: `${detection.box.y * 100}%`,
+                        width: `${detection.box.width * 100}%`,
+                        height: `${detection.box.height * 100}%`,
+                      }}
+                    />
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <ScanFrameIcon />
+          )}
           {!imageDataUrl ? <span>导入照片后在本地预览</span> : null}
+          {status === 'recognizing' ? (
+            <span className="mj-recognition-loading">
+              <LoaderCircle aria-hidden="true" />
+              正在识别
+            </span>
+          ) : null}
         </div>
       </SectionCard>
+
+      {statusAlert ? (
+        <Alert icon={status === 'recognizing' ? <LoaderCircle aria-hidden="true" /> : <AlertCircle aria-hidden="true" />} tone={statusAlert.tone} title={statusAlert.title}>
+          {statusAlert.text}
+        </Alert>
+      ) : null}
 
       <SectionCard className="mj-recognition-result-card" title="最终牌序">
         {selectedCandidateTiles.length > 0 ? (
           <div aria-label="识别候选牌" className="mj-recognition-candidates">
-            {selectedCandidateTiles.map((tile) => (
-              <MahjongTile
-                key={tile}
-                code={tile}
-                disabled={isCandidateDisabled(tile)}
-                selected={tiles[selectedRecognitionIndex ?? -1] === tile}
-                size="lg"
-                onClick={() => chooseRecognitionCandidate(tile)}
-              />
-            ))}
+            {selectedCandidateTiles.map((candidate) => {
+              const percent = Math.round(candidate.confidence * 100);
+              return (
+                <button
+                  key={candidate.tile}
+                  className="mj-recognition-candidate-button"
+                  disabled={isCandidateDisabled(candidate.tile)}
+                  type="button"
+                  onClick={() => chooseRecognitionCandidate(candidate.tile)}
+                >
+                  <MahjongTile
+                    aria-hidden="true"
+                    code={candidate.tile}
+                    selected={tiles[selectedRecognitionIndex ?? -1] === candidate.tile}
+                    size="lg"
+                  />
+                  <span>{percent}%</span>
+                </button>
+              );
+            })}
           </div>
         ) : null}
         <TileStrip
@@ -672,16 +759,29 @@ export function HandRecognitionPage() {
           tileSize="xs"
           tiles={tiles}
           onTileClick={recognitionCandidates.length > 0 ? setSelectedRecognitionIndex : undefined}
-          onRemove={(index) => setTiles(tiles.filter((_, currentIndex) => currentIndex !== index))}
+          onRemove={removeTile}
         />
         <ActionButton fullWidth icon={<Keyboard aria-hidden="true" />} onClick={() => setKeyboardOpen(true)}>
           打开牌键盘修正
         </ActionButton>
+        <ActionButton disabled={tiles.length === 0} fullWidth icon={<Sparkles aria-hidden="true" />} onClick={importToQuickScore}>
+          带入快速算分
+        </ActionButton>
       </SectionCard>
 
-      <Alert icon={<AlertCircle aria-hidden="true" />} tone="info" title="本地处理">
-        本页不会上传照片；牌序以你确认后的输入为准，同一物理牌最多 4 枚。
-      </Alert>
+      {warnings.length > 0 ? (
+        <div className="mj-recognition-warning-list">
+          {warnings.map((warning) => (
+            <Alert key={warning} icon={<AlertCircle aria-hidden="true" />} tone="warning" title="识别提示">
+              {warning}
+            </Alert>
+          ))}
+        </div>
+      ) : (
+        <Alert icon={<AlertCircle aria-hidden="true" />} tone="info" title="本地处理">
+          本页不会上传照片；牌序以你确认后的输入为准，同一物理牌最多 4 枚。
+        </Alert>
+      )}
 
       <ActionButton disabled={tiles.length === 0} fullWidth icon={<Copy aria-hidden="true" />} onClick={copyTiles}>
         复制最终牌序
@@ -696,7 +796,7 @@ export function HandRecognitionPage() {
         tiles={tiles}
         title="修正实体手牌"
         isTileDisabled={hasFourPhysicalCopies}
-        onChange={(value) => setTiles(toTileCodes(value))}
+        onChange={setKeyboardTiles}
         onClose={() => setKeyboardOpen(false)}
         onDone={() => setKeyboardOpen(false)}
       />

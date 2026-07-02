@@ -2411,6 +2411,7 @@
 }
 
 .mj-scan-preview {
+  position: relative;
   display: grid;
   place-items: center;
   gap: 10px;
@@ -2477,6 +2478,28 @@
 
 .mj-recognition-candidates .mj-tile {
   flex: 0 0 auto;
+}
+
+.mj-recognition-candidate-button {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--mj-muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.mj-recognition-candidate-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.mj-recognition-candidate-button:not(:disabled) {
+  cursor: pointer;
 }
 
 .mj-recognition-result-card .mj-tile-strip__row {
@@ -2833,10 +2856,66 @@
   background: #111;
 }
 
-.mj-scan-preview--image img {
+.mj-recognition-image-wrap {
+  position: relative;
+  display: inline-block;
   width: 100%;
+  max-width: 100%;
+  line-height: 0;
+}
+
+.mj-scan-preview--image img {
+  display: block;
+  width: 100%;
+  height: auto;
   max-height: 260px;
   object-fit: contain;
+}
+
+.mj-recognition-box-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.mj-recognition-box {
+  position: absolute;
+  border: 2px solid var(--mj-gold);
+  border-radius: 5px;
+  box-shadow: 0 0 0 1px rgb(21 59 44 / 0.55);
+}
+
+.mj-recognition-loading {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.92);
+  color: var(--mj-green);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.mj-recognition-loading svg {
+  width: 14px;
+  height: 14px;
+  animation: mj-spin 0.9s linear infinite;
+}
+
+.mj-recognition-warning-list {
+  display: grid;
+  gap: 8px;
+}
+
+@keyframes mj-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @media (min-width: 720px) {
