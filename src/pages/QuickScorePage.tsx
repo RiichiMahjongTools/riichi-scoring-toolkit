@@ -1,4 +1,4 @@
-import { AlertCircle, Copy, Plus, RotateCcw, Share2, SlidersHorizontal, Sparkles, Trash2 } from 'lucide-react';
+import { AlertCircle, Copy, Minus, Plus, RotateCcw, Share2, SlidersHorizontal, Sparkles, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
 import {
@@ -28,7 +28,6 @@ import {
   type Wind,
 } from '../domain';
 import {
-  MODE_LABELS,
   WIND_LABELS,
   formatFu,
   formatHan,
@@ -62,13 +61,21 @@ const WIND_OPTIONS: Array<{ value: Wind; label: string }> = [
   { value: 'north', label: '北' },
 ];
 
-const EXTRA_OPTIONS: Array<{ key: keyof ScoreConditions; label: string }> = [
+const NORTH_DORA_OPTIONS = [0, 1, 2, 3, 4] as const;
+
+const COMMON_EXTRA_OPTIONS: Array<{ key: keyof ScoreConditions; label: string }> = [
   { key: 'riichi', label: '立直' },
+  { key: 'tsumo', label: '自摸' },
+];
+
+const EXTRA_OPTIONS: Array<{ key: keyof ScoreConditions; label: string }> = [
+  { key: 'doubleRiichi', label: '两立直' },
   { key: 'ippatsu', label: '一发' },
-  { key: 'haiteiOrHoutei', label: '海底' },
   { key: 'rinshan', label: '岭上' },
+  { key: 'haiteiOrHoutei', label: '河/海底' },
   { key: 'chankan', label: '抢杠' },
-  { key: 'doubleRiichi', label: '双立直' },
+  { key: 'tenhou', label: '天和' },
+  { key: 'chiihou', label: '地和' },
 ];
 
 function toTileCodes(values: string[]): TileCode[] {
@@ -108,11 +115,15 @@ function validateMeldDraft(kind: MeldKind, tiles: TileCode[], mode: ScoreMode): 
   return uniqueBaseCodes.size === 1 ? '' : `${MELD_KIND_LABELS[kind]}必须由相同牌组成`;
 }
 
-function keyboardTitle(target: KeyboardTarget): string {
-  if (target === 'dora') return '录入宝牌指示牌';
-  if (target === 'ura') return '录入里宝牌指示牌';
-  if (target === 'meld') return '录入副露面子';
-  return '录入手牌';
+function normalizeWinningIndex(length: number, expectedLength: number, index: number | null): number | null {
+  if (length === 0 || length !== expectedLength) return null;
+  if (index === null) return length - 1;
+  return Math.min(Math.max(index, 0), length - 1);
+}
+
+function moveTileToEnd<T>(tiles: readonly T[], index: number | null): T[] {
+  if (index === null || index === tiles.length - 1) return [...tiles];
+  return [...tiles.slice(0, index), ...tiles.slice(index + 1), tiles[index]];
 }
 
 async function copyResult(text: string, onDone: (message: string) => void) {
@@ -133,6 +144,7 @@ async function copyResult(text: string, onDone: (message: string) => void) {
 export function QuickScorePage() {
   const [mode, setMode] = useState<ScoreMode>('yonma');
   const [handTiles, setHandTiles] = useState<TileCode[]>([]);
+  const [winningTileIndex, setWinningTileIndex] = useState<number | null>(null);
   const [melds, setMelds] = useState<MeldInput[]>([]);
   const [meldKind, setMeldKind] = useState<MeldKind>('chi');
   const [meldDraftTiles, setMeldDraftTiles] = useState<TileCode[]>([]);
@@ -148,14 +160,19 @@ export function QuickScorePage() {
   const [copyMessage, setCopyMessage] = useState('');
   const meldDraftError = validateMeldDraft(meldKind, meldDraftTiles, mode);
   const expectedClosedTiles = expectedClosedTileCount(melds.length);
+  const selectedHandWinningIndex = normalizeWinningIndex(handTiles.length, expectedClosedTiles, winningTileIndex);
+  const scoringHandTiles = useMemo(
+    () => moveTileToEnd(handTiles, selectedHandWinningIndex),
+    [handTiles, selectedHandWinningIndex],
+  );
 
   const computation = useMemo<QuickComputation>(() => {
-    if (handTiles.length === 0) return { kind: 'empty' };
+    if (scoringHandTiles.length === 0) return { kind: 'empty' };
 
     try {
       return calculateScoreOrEfficiency({
         mode,
-        handTiles: parseTileCodes(handTiles),
+        handTiles: parseTileCodes(scoringHandTiles),
         melds,
         doraIndicators: parseTileCodes(doraIndicators),
         uraDoraIndicators: parseTileCodes(uraDoraIndicators),
@@ -177,12 +194,12 @@ export function QuickScorePage() {
     conditions,
     doraIndicators,
     doubleWindPairTwoFu,
-    handTiles,
     honba,
     melds,
     mode,
     northDoraCount,
     roundWind,
+    scoringHandTiles,
     seatWind,
     uraDoraIndicators,
   ]);
@@ -210,12 +227,24 @@ export function QuickScorePage() {
       setMeldDraftTiles(next);
       return;
     }
+    const previousLength = handTiles.length;
     setHandTiles(next);
+    setWinningTileIndex((current) => {
+      if (next.length !== expectedClosedTiles) return null;
+      if (next.length !== previousLength || current === null) return next.length - 1;
+      return Math.min(current, next.length - 1);
+    });
+  };
+
+  const selectHandWinningIndex = (index: number) => {
+    if (handTiles.length === 0) return;
+    setWinningTileIndex(index);
   };
 
   const selectMode = (nextMode: ScoreMode) => {
     setMode(nextMode);
     if (nextMode === 'sanma' && meldKind === 'chi') setMeldKind('pon');
+    if (nextMode === 'yonma') setNorthDoraCount(0);
   };
 
   const addMeld = () => {
@@ -226,6 +255,7 @@ export function QuickScorePage() {
 
   const reset = () => {
     setHandTiles([]);
+    setWinningTileIndex(null);
     setMelds([]);
     setMeldDraftTiles([]);
     setDoraIndicators([]);
@@ -249,21 +279,7 @@ export function QuickScorePage() {
 
   return (
     <div className="mj-page-stack mj-quick-page">
-      <div className="mj-quick-summary-grid">
-        <QuickSummaryCard label="模式" value={MODE_LABELS[mode]} onClick={() => selectMode(mode === 'yonma' ? 'sanma' : 'yonma')} />
-        <QuickSummaryCard
-          label="和牌"
-          tone="danger"
-          value={conditions.tsumo ? '自摸' : '荣和'}
-          onClick={() => setConditions((value) => ({ ...value, tsumo: !value.tsumo }))}
-        />
-        <QuickSummaryCard
-          label="本场"
-          tone="gold"
-          value={`${honba}本场`}
-          onClick={() => setHonba((value) => (value + 1) % 5)}
-        />
-      </div>
+      <QuickScorePanel computation={computation} seatWind={seatWind} />
 
       <section className="mj-design-card mj-quick-hand-card">
         <header className="mj-design-card__header">
@@ -272,14 +288,20 @@ export function QuickScorePage() {
         </header>
         <div className="mj-quick-tile-row" aria-label="当前手牌">
           {handTiles.length > 0 ? (
-            handTiles.map((tile, index) => (
-              <MahjongTile
-                key={`${tile}-${index}`}
-                code={tile}
-                size="sm"
-                onClick={() => setHandTiles(handTiles.filter((_, currentIndex) => currentIndex !== index))}
-              />
-            ))
+            handTiles.map((tile, index) => {
+              const isWinning = index === selectedHandWinningIndex;
+              return (
+                <MahjongTile
+                  key={`${tile}-${index}`}
+                  className={isWinning ? 'mj-tile--winning' : undefined}
+                  code={tile}
+                  marker={isWinning ? '和' : undefined}
+                  selected={isWinning}
+                  size="sm"
+                  onClick={() => selectHandWinningIndex(index)}
+                />
+              );
+            })
           ) : (
             <span className="mj-muted-line">未录入手牌</span>
           )}
@@ -377,22 +399,42 @@ export function QuickScorePage() {
           <Pill selected={mode === 'sanma'} onClick={() => selectMode('sanma')}>三麻</Pill>
         </RuleRow>
         <RuleRow label="场风">
-          {WIND_OPTIONS.slice(0, 2).map((option) => (
+          {WIND_OPTIONS.map((option) => (
             <Pill key={option.value} selected={roundWind === option.value} onClick={() => setRoundWind(option.value)}>
               {option.label}
             </Pill>
           ))}
         </RuleRow>
         <RuleRow label="自风">
-          {WIND_OPTIONS.slice(1, 3).map((option) => (
+          {WIND_OPTIONS.map((option) => (
             <Pill key={option.value} selected={seatWind === option.value} onClick={() => setSeatWind(option.value)}>
               {option.label}
             </Pill>
           ))}
         </RuleRow>
-        <RuleRow label="三麻拔北">
-          <Pill selected={northDoraCount === 0} onClick={() => setNorthDoraCount(0)}>关闭</Pill>
-          <Pill selected={northDoraCount > 0} onClick={() => setNorthDoraCount(northDoraCount > 0 ? 0 : 1)}>开启</Pill>
+        {mode === 'sanma' ? (
+          <RuleRow label="三麻拔北">
+            {NORTH_DORA_OPTIONS.map((value) => (
+              <Pill
+                key={value}
+                selected={northDoraCount === value}
+                onClick={() => setNorthDoraCount(value)}
+              >
+                {value}
+              </Pill>
+            ))}
+          </RuleRow>
+        ) : null}
+        <RuleRow label="本场">
+          <HonbaStepper
+            value={honba}
+            onDecrement={() => setHonba((value) => Math.max(0, value - 1))}
+            onIncrement={() => setHonba((value) => value + 1)}
+          />
+        </RuleRow>
+        <RuleRow label="连风雀头">
+          <Pill selected={!doubleWindPairTwoFu} onClick={() => setDoubleWindPairTwoFu(false)}>4符</Pill>
+          <Pill selected={doubleWindPairTwoFu} onClick={() => setDoubleWindPairTwoFu(true)}>2符</Pill>
         </RuleRow>
       </section>
 
@@ -400,13 +442,27 @@ export function QuickScorePage() {
         <header className="mj-design-card__header">
           <h2>额外役与修正</h2>
         </header>
-        <div className="mj-quick-chip-grid">
-          {EXTRA_OPTIONS.map((option) => (
-            <Chip key={option.key} selected={conditions[option.key]} onClick={() => toggleCondition(option.key)}>
-              {option.label}
-            </Chip>
-          ))}
-          <Chip onClick={() => setCopyMessage('流局满贯需要特殊规则确认，当前不会写入结果')}>流局满贯</Chip>
+        <div className="mj-quick-extra-layout">
+          <div className="mj-quick-chip-grid">
+            {EXTRA_OPTIONS.map((option) => (
+              <Chip key={option.key} selected={conditions[option.key]} onClick={() => toggleCondition(option.key)}>
+                {option.label}
+              </Chip>
+            ))}
+            <Chip onClick={() => setCopyMessage('流局满贯需要特殊规则确认，当前不会写入结果')}>流局满贯</Chip>
+          </div>
+          <div aria-label="常用役" className="mj-quick-common-actions">
+            {COMMON_EXTRA_OPTIONS.map((option) => (
+              <Chip
+                key={option.key}
+                className="mj-quick-common-chip"
+                selected={conditions[option.key]}
+                onClick={() => toggleCondition(option.key)}
+              >
+                {option.label}
+              </Chip>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -428,7 +484,6 @@ export function QuickScorePage() {
         </Alert>
       ) : null}
 
-      <QuickScorePanel computation={computation} seatWind={seatWind} />
       <QuickEfficiencyPanel computation={computation} />
 
       <div className="mj-quick-actions-bottom">
@@ -465,6 +520,8 @@ export function QuickScorePage() {
               : 5
         }
         open={keyboardTarget !== null}
+        previewHighlightIndex={keyboardTarget === 'hand' ? selectedHandWinningIndex : null}
+        previewHighlightLast={false}
         previewLabel={
           keyboardTarget === 'hand'
             ? '当前手牌'
@@ -472,34 +529,15 @@ export function QuickScorePage() {
               ? `${MELD_KIND_LABELS[meldKind]}预览`
               : '当前指示牌'
         }
-        subtitle="同一物理牌最多 4 枚；普通五与赤五共享数量。"
         tiles={keyboardTiles}
-        title={keyboardTarget ? keyboardTitle(keyboardTarget) : '录入牌'}
+        title={null}
         isTileDisabled={hasFourPhysicalCopies}
         onChange={setKeyboardTiles}
         onClose={() => setKeyboardTarget(null)}
         onDone={() => setKeyboardTarget(null)}
+        onPreviewTileSelect={keyboardTarget === 'hand' ? selectHandWinningIndex : undefined}
       />
     </div>
-  );
-}
-
-function QuickSummaryCard({
-  label,
-  value,
-  tone = 'default',
-  onClick,
-}: {
-  label: string;
-  value: string;
-  tone?: 'default' | 'danger' | 'gold';
-  onClick: () => void;
-}) {
-  return (
-    <button className={`mj-quick-summary-card mj-quick-summary-card--${tone}`} type="button" onClick={onClick}>
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </button>
   );
 }
 
@@ -512,9 +550,47 @@ function RuleRow({ label, children }: { label: string; children: React.ReactNode
   );
 }
 
-function Pill({ selected, children, onClick }: { selected: boolean; children: React.ReactNode; onClick: () => void }) {
+function HonbaStepper({
+  value,
+  onDecrement,
+  onIncrement,
+}: {
+  value: number;
+  onDecrement: () => void;
+  onIncrement: () => void;
+}) {
   return (
-    <button className={selected ? 'mj-rule-pill mj-rule-pill--selected' : 'mj-rule-pill'} type="button" onClick={onClick}>
+    <div className="mj-honba-stepper" aria-label="本场数">
+      <button aria-label="减少本场" disabled={value <= 0} type="button" onClick={onDecrement}>
+        <Minus aria-hidden="true" />
+      </button>
+      <strong>{value}</strong>
+      <button aria-label="增加本场" type="button" onClick={onIncrement}>
+        <Plus aria-hidden="true" />
+      </button>
+      <span>本场</span>
+    </div>
+  );
+}
+
+function Pill({
+  selected,
+  children,
+  disabled = false,
+  onClick,
+}: {
+  selected: boolean;
+  children: React.ReactNode;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      className={selected ? 'mj-rule-pill mj-rule-pill--selected' : 'mj-rule-pill'}
+      disabled={disabled}
+      type="button"
+      onClick={onClick}
+    >
       {children}
     </button>
   );

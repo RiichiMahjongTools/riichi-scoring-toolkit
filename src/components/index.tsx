@@ -8,6 +8,7 @@ import {
   MessageCircle,
   Minus,
   Plus,
+  RotateCcw,
   Send,
   Share2,
   Signal,
@@ -579,6 +580,9 @@ export interface TileStripProps extends HTMLAttributes<HTMLDivElement> {
   emptyLabel?: ReactNode;
   maxSlots?: number;
   highlightLast?: boolean;
+  highlightIndex?: number | null;
+  onTileClick?: (index: number) => void;
+  tileActionLabel?: (index: number, tileLabel: string) => string;
   onRemove?: (index: number) => void;
   tileSize?: MahjongTileProps['size'];
 }
@@ -589,30 +593,41 @@ export function TileStrip({
   emptyLabel = '尚未选择牌',
   maxSlots,
   highlightLast = false,
+  highlightIndex,
+  onTileClick,
+  tileActionLabel,
   onRemove,
   tileSize = 'md',
   className,
   ...props
 }: TileStripProps) {
   const emptySlots = maxSlots ? Math.max(0, maxSlots - tiles.length) : 0;
+  const selectedIndex = highlightIndex ?? (highlightLast ? tiles.length - 1 : null);
 
   return (
     <div className={cx('mj-tile-strip', className)} {...props}>
       {label ? <div className="mj-tile-strip__label">{label}</div> : null}
       <div className="mj-tile-strip__row">
-        {tiles.length === 0 ? <span className="mj-tile-strip__empty">{emptyLabel}</span> : null}
+        {tiles.length === 0 && emptyLabel ? <span className="mj-tile-strip__empty">{emptyLabel}</span> : null}
         {tiles.map((tile, index) => {
           const meta = tileCodeToMeta(tile);
-          const isLast = highlightLast && index === tiles.length - 1;
+          const isSelected = index === selectedIndex;
+          const handleTileClick = onTileClick ?? onRemove;
           return (
             <MahjongTile
               key={`${tile}-${index}`}
-              ariaLabel={onRemove ? `移除第 ${index + 1} 张${meta.ariaLabel}` : meta.ariaLabel}
-              className={isLast ? 'mj-tile--winning' : undefined}
+              ariaLabel={
+                onTileClick
+                  ? (tileActionLabel?.(index, meta.ariaLabel) ?? `选择第 ${index + 1} 张${meta.ariaLabel}`)
+                  : onRemove
+                    ? `移除第 ${index + 1} 张${meta.ariaLabel}`
+                    : meta.ariaLabel
+              }
+              className={isSelected ? 'mj-tile--winning' : undefined}
               code={tile}
-              marker={isLast ? '和' : undefined}
-              onClick={onRemove ? () => onRemove(index) : undefined}
-              selected={isLast}
+              marker={isSelected ? '和' : undefined}
+              onClick={handleTileClick ? () => handleTileClick(index) : undefined}
+              selected={isSelected}
               size={tileSize}
             />
           );
@@ -661,6 +676,9 @@ export interface TileKeyboardProps {
   title?: ReactNode;
   subtitle?: ReactNode;
   previewLabel?: ReactNode;
+  previewHighlightLast?: boolean;
+  previewHighlightIndex?: number | null;
+  onPreviewTileSelect?: (index: number) => void;
   doneLabel?: ReactNode;
   allowRedFives?: boolean;
   suits?: TileSuitDefinition[];
@@ -677,6 +695,9 @@ export function TileKeyboard({
   title = '选择手牌',
   subtitle,
   previewLabel = '手牌预览',
+  previewHighlightLast = true,
+  previewHighlightIndex,
+  onPreviewTileSelect,
   doneLabel = '完成',
   allowRedFives = true,
   suits = defaultTileSuits,
@@ -746,11 +767,23 @@ export function TileKeyboard({
     return null;
   }
 
+  const hasHeaderText = Boolean(title || subtitle);
+  const dialogLabelProps = title ? { 'aria-labelledby': titleId } : { 'aria-label': '牌面键盘' };
+
   const addTile = (tile: string) => {
     if (tiles.length >= maxTiles || isTileDisabled?.(tile, tiles)) {
       return;
     }
     onChange([...tiles, tile]);
+  };
+
+  const deleteIndex =
+    onPreviewTileSelect && typeof previewHighlightIndex === 'number'
+      ? previewHighlightIndex
+      : tiles.length - 1;
+  const deleteSelectedTile = () => {
+    if (deleteIndex < 0) return;
+    onChange(tiles.filter((_, currentIndex) => currentIndex !== deleteIndex));
   };
 
   return (
@@ -765,21 +798,27 @@ export function TileKeyboard({
       ) : (
         <div aria-hidden="true" className="mj-keyboard-layer__backdrop" />
       )}
-      <section ref={dialogRef} aria-labelledby={titleId} aria-modal="true" className="mj-tile-keyboard" role="dialog">
+      <section ref={dialogRef} {...dialogLabelProps} aria-modal="true" className="mj-tile-keyboard" role="dialog">
         <div className="mj-tile-keyboard__handle" aria-hidden="true" />
-        <div className="mj-tile-keyboard__header">
-          <div>
-            <h2 id={titleId}>{title}</h2>
-            {subtitle ? <p>{subtitle}</p> : null}
+        {hasHeaderText || onClose ? (
+          <div className={cx('mj-tile-keyboard__header', !hasHeaderText && 'mj-tile-keyboard__header--icon-only')}>
+            {hasHeaderText ? (
+              <div>
+                {title ? <h2 id={titleId}>{title}</h2> : null}
+                {subtitle ? <p>{subtitle}</p> : null}
+              </div>
+            ) : null}
+            {onClose ? (
+              <IconButton ariaLabel="关闭牌键盘" icon={<X aria-hidden="true" />} onClick={onClose} variant="surface" />
+            ) : null}
           </div>
-          {onClose ? (
-            <IconButton ariaLabel="关闭牌键盘" icon={<X aria-hidden="true" />} onClick={onClose} variant="surface" />
-          ) : null}
-        </div>
+        ) : null}
 
         <TileStrip
-          emptyLabel="点击下方牌面开始输入"
-          highlightLast
+          className="mj-keyboard-preview-strip"
+          emptyLabel={null}
+          highlightIndex={previewHighlightIndex}
+          highlightLast={previewHighlightLast}
           label={
             <span>
               {previewLabel}
@@ -790,15 +829,15 @@ export function TileKeyboard({
           }
           maxSlots={Math.min(maxTiles, 14)}
           tiles={tiles}
+          tileActionLabel={(index, tileLabel) => `选择第 ${index + 1} 张${tileLabel}为和牌`}
           tileSize="sm"
-          onRemove={(index) => onChange(tiles.filter((_, currentIndex) => currentIndex !== index))}
+          onRemove={
+            onPreviewTileSelect
+              ? undefined
+              : (index) => onChange(tiles.filter((_, currentIndex) => currentIndex !== index))
+          }
+          onTileClick={onPreviewTileSelect}
         />
-
-        {atLimit ? (
-          <Alert tone="warning" title={`最多选择 ${maxTiles} 张`}>
-            如需继续输入，请先删除一张牌或清空当前选择。
-          </Alert>
-        ) : null}
 
         <div aria-label="选择花色" className="mj-suit-tabs" role="group">
           {suits.map((suit) => (
@@ -824,7 +863,6 @@ export function TileKeyboard({
                 ariaLabel={`加入${meta.ariaLabel}`}
                 code={tile}
                 disabled={disabled}
-                marker={meta.isRed ? '赤' : undefined}
                 onClick={() => addTile(tile)}
                 size="lg"
               />
@@ -837,11 +875,17 @@ export function TileKeyboard({
             disabled={tiles.length === 0}
             icon={<Trash2 aria-hidden="true" />}
             variant="ghost"
-            onClick={() => onChange(tiles.slice(0, -1))}
+            onClick={deleteSelectedTile}
           >
             删除
           </ActionButton>
-          <ActionButton disabled={tiles.length === 0} variant="secondary" onClick={() => onChange([])}>
+          <ActionButton
+            className="mj-keyboard-clear-action"
+            disabled={tiles.length === 0}
+            icon={<RotateCcw aria-hidden="true" />}
+            variant="ghost"
+            onClick={() => onChange([])}
+          >
             清空
           </ActionButton>
           <ActionButton fullWidth icon={<Check aria-hidden="true" />} onClick={onDone}>

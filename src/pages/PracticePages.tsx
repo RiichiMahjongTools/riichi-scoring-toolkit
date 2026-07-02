@@ -22,13 +22,28 @@ import {
   generateComebackPracticeQuestion,
   generateFuPracticeQuestion,
   generatePointPracticeQuestion,
+  getLegalRonFuOptions,
   type FuValue,
   type PracticeFeedback,
 } from '../domain';
 import { WIND_LABELS, formatComebackAnswer, formatPoints, formatWinMethod } from './shared';
 
 const RANK_LABELS = ['一', '二', '三', '四', '五', '六', '七', '八', '九'];
-const COMEBACK_OPTIONS: Array<FuValue | 'impossible'> = ['impossible', 25, 30, 40, 50, 60, 70, 80, 90, 100, 110];
+const COMEBACK_OPTION_ROWS: Array<Array<FuValue | 'impossible'>> = [
+  [20, 25, 30, 40, 50, 60],
+  [70, 80, 90, 100, 110, 'impossible'],
+];
+
+function shortComebackAnswer(value: FuValue | 'impossible' | undefined): string {
+  if (!value) return '-';
+  if (value === 'impossible') return '不可';
+  return String(value);
+}
+
+function isComebackOptionAvailable(han: number, option: FuValue | 'impossible'): boolean {
+  if (option === 'impossible') return true;
+  return getLegalRonFuOptions(han).includes(option);
+}
 
 function PracticeStats({
   items,
@@ -85,7 +100,8 @@ export function ChinitsuPracticePage() {
     setStreak((value) => (result.correct ? value + 1 : 0));
   };
 
-  const answerTiles = (feedback?.correctAnswer ?? question.correctWaits).map((rank) => `${question.suit}${rank}`);
+  const correctAnswerTiles = (feedback?.correctAnswer ?? question.correctWaits).map((rank) => `${question.suit}${rank}`);
+  const userAnswerTiles = (feedback?.userAnswer ?? selectedRanks).map((rank) => `${question.suit}${rank}`);
 
   return (
     <div className="mj-page-stack mj-practice-design mj-chinitsu-page">
@@ -97,32 +113,58 @@ export function ChinitsuPracticePage() {
         ]}
       />
 
-      <SectionCard title="清一色手牌">
+      <SectionCard className="mj-practice-hand-card mj-chinitsu-hand-card" title="清一色手牌">
         <TileStrip tileSize="sm" tiles={question.handTiles.map((tile) => tile.code)} />
       </SectionCard>
 
+      {feedback ? (
+        <section className={feedback.correct ? 'mj-practice-result-compact mj-practice-result-compact--success mj-chinitsu-result-card' : 'mj-practice-result-compact mj-practice-result-compact--danger mj-chinitsu-result-card'}>
+          <h2>{feedback.correct ? '本题连对 +1' : '本题需要复盘'}</h2>
+          <div className="mj-chinitsu-feedback-list">
+            <div className="mj-chinitsu-feedback-row">
+              <span>正确答案</span>
+              <div className="mj-chinitsu-feedback-tiles">
+                {correctAnswerTiles.map((tile) => (
+                  <MahjongTile key={tile} code={tile} size="sm" />
+                ))}
+              </div>
+            </div>
+            <div className="mj-chinitsu-feedback-row">
+              <span>你的答案</span>
+              <div className="mj-chinitsu-feedback-tiles">
+                {userAnswerTiles.length > 0 ? userAnswerTiles.map((tile) => (
+                  <MahjongTile key={tile} code={tile} size="sm" />
+                )) : <small>未选择</small>}
+              </div>
+            </div>
+          </div>
+        </section>
+      ) : null}
+
       <SectionCard title="选择全部听牌 / 有效和牌">
         <div className="mj-chinitsu-answer-grid">
-          {question.candidateRanks.map((rank, index) => {
+          {question.candidateRanks.map((rank) => {
             const selected = selectedRanks.includes(rank);
             const isCorrect = Boolean(feedback?.correctAnswer.includes(rank));
             const isWrong = Boolean(feedback && selected && !isCorrect);
+            const tileCode = `${question.suit}${rank}`;
             return (
               <button
                 key={rank}
                 aria-pressed={selected}
+                aria-label={`选择${rank}${question.suit === 'm' ? '万' : question.suit === 'p' ? '筒' : '索'}`}
                 className={[
-                  'mj-rank-choice',
-                  selected && 'mj-rank-choice--selected',
-                  feedback && isCorrect && 'mj-rank-choice--correct',
-                  isWrong && 'mj-rank-choice--wrong',
+                  'mj-wait-tile-choice',
+                  selected && 'mj-wait-tile-choice--selected',
+                  feedback && isCorrect && 'mj-wait-tile-choice--correct',
+                  isWrong && 'mj-wait-tile-choice--wrong',
                 ]
                   .filter(Boolean)
                   .join(' ')}
                 type="button"
                 onClick={() => toggleRank(rank)}
               >
-                {RANK_LABELS[index]}
+                <MahjongTile aria-hidden="true" code={tileCode} selected={isCorrect || (selected && !feedback)} size="lg" />
               </button>
             );
           })}
@@ -130,21 +172,12 @@ export function ChinitsuPracticePage() {
       </SectionCard>
 
       {feedback ? (
-        <section className={feedback.correct ? 'mj-practice-result-compact mj-practice-result-compact--success' : 'mj-practice-result-compact mj-practice-result-compact--danger'}>
-          <h2>{feedback.correct ? '本题连对 +1' : '本题需要复盘'}</h2>
-          <div className="mj-result-tile-row">
-            {answerTiles.map((tile) => (
-              <MahjongTile key={tile} code={tile} size="lg" />
-            ))}
-          </div>
-          <p>{feedback.breakdown.join(' · ')}</p>
-          <ActionButton fullWidth icon={<Sparkles aria-hidden="true" />} onClick={() => nextPracticeSeed(setSeed, () => {
-            setSelectedRanks([]);
-            setFeedback(null);
-          })}>
-            下一题
-          </ActionButton>
-        </section>
+        <ActionButton fullWidth icon={<Sparkles aria-hidden="true" />} onClick={() => nextPracticeSeed(setSeed, () => {
+          setSelectedRanks([]);
+          setFeedback(null);
+        })}>
+          下一题
+        </ActionButton>
       ) : (
         <ActionButton disabled={selectedRanks.length === 0} fullWidth icon={<Check aria-hidden="true" />} onClick={submit}>
           提交答案
@@ -386,72 +419,105 @@ export function ComebackPracticePage() {
     setStreak((value) => (result.correct ? value + 1 : 0));
   };
 
+  const nextQuestion = () => nextPracticeSeed(setSeed, () => {
+    setAnswers({});
+    setFeedback(null);
+  });
+
+  const selectAnswer = (han: number, option: FuValue | 'impossible') => {
+    setFeedback(null);
+    setAnswers((value) => ({ ...value, [han]: option }));
+  };
+
   return (
     <div className="mj-page-stack mj-practice-design mj-comeback-practice-page">
-      <section className="mj-comeback-hero">
-        <span>荣和所需点差</span>
-        <strong>{question.pointGap.toLocaleString('zh-CN')}</strong>
-        <p>
-          {WIND_LABELS[question.userSeatWind]}家追分 · 对手{WIND_LABELS[question.targetSeatWind]}家 · 不计供托
-        </p>
-      </section>
+      <section className="mj-comeback-sheet">
+        <header className="mj-comeback-sheet__header">
+          <h2>作答</h2>
+          <span>{streak}连正</span>
+        </header>
 
-      <SectionCard title="判断 1 到 4 番最低需要多少符">
-        <div className="mj-comeback-answer-list">
+        <div className="mj-comeback-sheet__body">
+          <p className="mj-comeback-question">
+            您的自风是<strong>{WIND_LABELS[question.userSeatWind]}</strong>，
+            距离逆转需要<strong>{question.pointGap.toLocaleString('zh-CN')}点</strong>，
+            对手自风为<strong>{WIND_LABELS[question.targetSeatWind]}</strong>。
+            请判断下列番数中最低需要多少符<strong>荣和</strong>。
+          </p>
+
+          <div className="mj-comeback-board-list" aria-label="逆转所需番符作答">
           {question.hanTiers.map((han) => {
             const selected = answers[han];
             const standard = feedback?.correctAnswer[han] ?? question.answers[han];
-            const wrong = Boolean(feedback && selected !== standard);
+            const isWrong = Boolean(feedback && selected !== standard);
+            const isCorrect = Boolean(feedback && selected === standard);
             return (
-              <div key={han} className="mj-comeback-answer-row mj-comeback-answer-row--interactive">
-                <strong>{han}番</strong>
-                <span className={wrong ? 'mj-answer-pill mj-answer-pill--wrong' : 'mj-answer-pill'}>
-                  你的{formatComebackAnswer(selected)}
+              <div key={han} className="mj-comeback-board">
+                <span
+                  className={[
+                    'mj-comeback-board__answer',
+                    selected === 'impossible' && 'mj-comeback-board__answer--impossible',
+                    isWrong && 'mj-comeback-board__answer--wrong',
+                    isCorrect && 'mj-comeback-board__answer--correct',
+                  ].filter(Boolean).join(' ')}
+                >
+                  <strong>{shortComebackAnswer(selected)}</strong>
+                  <small>{feedback ? `标准 ${formatComebackAnswer(standard)}` : `${han}番符数`}</small>
                 </span>
-                {feedback ? <span className="mj-answer-pill mj-answer-pill--plain">标准 {formatComebackAnswer(standard)}</span> : null}
-                <div className="mj-chip-row">
-                  {COMEBACK_OPTIONS.map((option) => (
-                    <Chip
-                      key={`${han}-${option}`}
-                      selected={selected === option}
-                      onClick={() => {
-                        setFeedback(null);
-                        setAnswers((value) => ({ ...value, [han]: option }));
-                      }}
-                    >
-                      {formatComebackAnswer(option)}
-                    </Chip>
-                  ))}
-                </div>
+                {COMEBACK_OPTION_ROWS.flatMap((row) =>
+                  row.map((option) => {
+                    const disabled = !isComebackOptionAvailable(han, option);
+                    const selectedCell = selected === option;
+                    const correctCell = feedback && standard === option;
+                    const wrongCell = feedback && selectedCell && selected !== standard;
+                    return (
+                      <button
+                        key={`${han}-${option}`}
+                        aria-pressed={selectedCell}
+                        className={[
+                          'mj-comeback-fu-cell',
+                          selectedCell && 'mj-comeback-fu-cell--selected',
+                          correctCell && 'mj-comeback-fu-cell--correct',
+                          wrongCell && 'mj-comeback-fu-cell--wrong',
+                          option === 'impossible' && 'mj-comeback-fu-cell--impossible',
+                        ].filter(Boolean).join(' ')}
+                        disabled={disabled}
+                        type="button"
+                        onClick={() => selectAnswer(han, option)}
+                      >
+                        {shortComebackAnswer(option)}
+                      </button>
+                    );
+                  }),
+                )}
               </div>
             );
           })}
+          </div>
         </div>
-      </SectionCard>
 
-      {feedback ? (
-        <Alert icon={<AlertCircle aria-hidden="true" />} tone={feedback.correct ? 'success' : 'warning'} title="判定结果">
-          {feedback.correct ? `全部正确，当前连对 ${streak}` : feedback.breakdown.join('；')}
-        </Alert>
-      ) : null}
+        {feedback ? (
+          <div className="mj-comeback-feedback">
+            <Alert icon={<AlertCircle aria-hidden="true" />} tone={feedback.correct ? 'success' : 'warning'} title="判定结果">
+              {feedback.correct ? `全部正确，当前连对 ${streak}` : feedback.breakdown.join('；')}
+            </Alert>
+            <ActionButton fullWidth icon={<Sparkles aria-hidden="true" />} variant="secondary" onClick={nextQuestion}>
+              下一题
+            </ActionButton>
+          </div>
+        ) : null}
 
-      <div className="mj-button-row mj-button-row--two">
-        <ActionButton disabled={!isComplete} icon={<Check aria-hidden="true" />} onClick={submit}>
-          提交判断
-        </ActionButton>
-        <ActionButton icon={<Sparkles aria-hidden="true" />} variant="secondary" onClick={() => nextPracticeSeed(setSeed, () => {
-          setAnswers({});
-          setFeedback(null);
-        })}>
-          下一题
-        </ActionButton>
-      </div>
-
-      <ActionButton fullWidth icon={<Calculator aria-hidden="true" />} variant="ghost" onClick={() => {
-        window.location.hash = '#/han-fu-calculator';
-      }}>
-        跳转番符点数计算
-      </ActionButton>
+        <footer className="mj-comeback-sheet__footer">
+          <ActionButton disabled={!isComplete} fullWidth icon={<Check aria-hidden="true" />} onClick={submit}>
+            确认答案
+          </ActionButton>
+          <ActionButton fullWidth icon={<Calculator aria-hidden="true" />} variant="ghost" onClick={() => {
+            window.location.hash = '#/han-fu-calculator';
+          }}>
+            查看番符点数计算器
+          </ActionButton>
+        </footer>
+      </section>
     </div>
   );
 }

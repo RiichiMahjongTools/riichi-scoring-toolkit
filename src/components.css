@@ -867,6 +867,10 @@ button.mj-tile {
   gap: 12px;
 }
 
+.mj-tile-keyboard__header--icon-only {
+  justify-content: flex-end;
+}
+
 .mj-tile-keyboard__header h2,
 .mj-tile-keyboard__header p {
   margin: 0;
@@ -882,6 +886,40 @@ button.mj-tile {
   color: var(--mj-muted);
   font-size: 13px;
   line-height: 1.45;
+}
+
+.mj-keyboard-preview-strip .mj-tile-strip__row {
+  display: grid;
+  grid-template-columns: repeat(14, minmax(0, 1fr));
+  gap: 2px;
+  min-height: 32px;
+  overflow: visible;
+  padding: 6px 0 4px;
+  scrollbar-width: none;
+}
+
+.mj-keyboard-preview-strip .mj-tile-strip__row::-webkit-scrollbar {
+  display: none;
+}
+
+.mj-keyboard-preview-strip .mj-tile--sm {
+  justify-self: center;
+  width: min(100%, 20px);
+  height: 29px;
+  border-radius: 6px;
+}
+
+.mj-keyboard-preview-strip .mj-tile__marker {
+  top: -5px;
+  right: -2px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 3px;
+  font-size: 9px;
+}
+
+.mj-keyboard-preview-strip .mj-tile-strip__empty {
+  grid-column: 1 / -1;
 }
 
 .mj-suit-tabs {
@@ -924,6 +962,18 @@ button.mj-tile {
   display: grid;
   grid-template-columns: auto auto minmax(0, 1fr);
   gap: 8px;
+}
+
+.mj-tile-keyboard__actions .mj-keyboard-clear-action {
+  color: var(--mj-red);
+  border-color: color-mix(in srgb, var(--mj-red) 24%, var(--mj-line));
+  background: color-mix(in srgb, var(--mj-red-soft) 68%, var(--mj-surface));
+}
+
+.mj-tile-keyboard__actions .mj-keyboard-clear-action:disabled {
+  color: color-mix(in srgb, var(--mj-muted) 74%, var(--mj-red));
+  border-color: var(--mj-line);
+  background: color-mix(in srgb, var(--mj-soft) 72%, var(--mj-surface));
 }
 
 .mj-han-fu-selector {
