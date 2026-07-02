@@ -15,7 +15,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import {
   ActionButton,
@@ -570,6 +570,19 @@ async function fileToDataUrl(file: File) {
   });
 }
 
+function imageFileFromClipboard(event: ClipboardEvent) {
+  const files = Array.from(event.clipboardData?.files ?? []);
+  const file = files.find((candidate) => candidate.type.startsWith('image/'));
+  if (file) return file;
+
+  const items = Array.from(event.clipboardData?.items ?? []);
+  const imageItem = items.find((item) => item.kind === 'file' && item.type.startsWith('image/'));
+  const blob = imageItem?.getAsFile();
+  if (!blob) return null;
+
+  return new File([blob], 'clipboard-image.png', { type: blob.type || 'image/png' });
+}
+
 export function HandRecognitionPage() {
   const [imageDataUrl, setImageDataUrl] = useState('');
   const [tiles, setTiles] = useState<TileCode[]>([]);
@@ -582,7 +595,7 @@ export function HandRecognitionPage() {
   const [keyboardOpen, setKeyboardOpen] = useState(false);
   const [message, setMessage] = useState('');
 
-  const handleFile = async (file: File | undefined) => {
+  const handleFile = useCallback(async (file: File | undefined) => {
     if (!file) return;
     setStatus('recognizing');
     setMessage('');
@@ -613,7 +626,19 @@ export function HandRecognitionPage() {
       setWarnings([error instanceof Error ? error.message : '图片读取失败']);
       setMessage('图片处理失败，请换一张照片或手动录入');
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    const handlePaste = (event: ClipboardEvent) => {
+      const file = imageFileFromClipboard(event);
+      if (!file) return;
+      event.preventDefault();
+      void handleFile(file);
+    };
+
+    document.addEventListener('paste', handlePaste);
+    return () => document.removeEventListener('paste', handlePaste);
+  }, [handleFile]);
 
   const selectedCandidateTiles =
     selectedRecognitionIndex === null ? [] : (recognitionCandidates[selectedRecognitionIndex] ?? []);
