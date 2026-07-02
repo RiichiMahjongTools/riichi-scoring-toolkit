@@ -1,22 +1,20 @@
 import {
+  AlertCircle,
   ArrowLeft,
   Camera,
   Check,
-  Clipboard,
   Copy,
-  Image as ImageIcon,
-  AlertCircle,
   Hammer,
   Home,
+  Image as ImageIcon,
   Keyboard,
-  MessageCircle,
   RotateCcw,
   SkipForward,
   Sparkles,
   Trash2,
   X,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import {
   ActionButton,
@@ -24,22 +22,119 @@ import {
   Chip,
   DataTable,
   MahjongTile,
-  MetricStatCard,
   PaymentCards,
-  PlaceholderPanel,
-  PracticeAnswerPanel,
   SectionCard,
   SegmentedControl,
+  TileKeyboard,
   TileStrip,
 } from '../components';
+import {
+  ALL_TILE_CODES,
+  baseTileCode,
+  calculatePoint,
+  getLegalFuOptions,
+  isTileCode,
+  tileLabel,
+  type FuValue,
+  type TileCode,
+  type WinMethod,
+} from '../domain';
 import type { PageProps } from './shared';
+import { formatPoints } from './shared';
 
-const sampleHand = ['m2', 'm3', 'm4', 'p2', 'p3', 'p4', 's6', 's7', 's8', 'z1', 'z1', 'z7', 'z7', 'z7'];
-const compactTiles = ['m1', 'm9', 'p2', 'p5', 's3', 's5r', 's8', 'z1', 'z3', 'z7'];
+const CHAT_SAMPLE_HAND = ['m2', 'm3', 'm4', 'p3', 'p4', 'p5r', 's6', 's7', 's8', 'z1', 'z1', 'z7'];
+const SEAT_IDS = ['east', 'south', 'west', 'north'] as const;
+type SeatId = (typeof SEAT_IDS)[number];
+type RecordOutcome = 'ron' | 'tsumo' | 'draw' | 'adjust';
+
+interface PlayerState {
+  id: SeatId;
+  wind: string;
+  name: string;
+  score: number;
+}
+
+interface HistoryEntry {
+  id: string;
+  title: string;
+  meta: string;
+  delta: string;
+  snapshot: {
+    players: PlayerState[];
+    dealerIndex: number;
+    roundIndex: number;
+    honba: number;
+  };
+}
+
+const SEAT_LABELS: Record<SeatId, string> = {
+  east: '东',
+  south: '南',
+  west: '西',
+  north: '北',
+};
+
+const INITIAL_PLAYERS: PlayerState[] = [
+  { id: 'east', wind: '东', name: '东家', score: 25000 },
+  { id: 'south', wind: '南', name: '南家', score: 25000 },
+  { id: 'west', wind: '西', name: '西家', score: 25000 },
+  { id: 'north', wind: '北', name: '北家', score: 25000 },
+];
+
+const LEGACY_YAKU = [
+  { id: 'daisharin', name: '大车轮', han: 13, note: '常见古役满，按单倍役满估算' },
+  { id: 'daichikurin', name: '大竹林', han: 13, note: '索子版大车轮，按单倍役满估算' },
+  { id: 'daisuurin', name: '大数邻', han: 13, note: '万子版大车轮，按单倍役满估算' },
+  { id: 'sanrenkou', name: '三连刻', han: 2, note: '地方役，默认 2 番' },
+  { id: 'isshoku-yonsun', name: '一色四顺', han: 13, note: '地方役满估算' },
+  { id: 'shiisanpuutaa', name: '十三不塔', han: 1, note: '地方役，默认 1 番' },
+];
+
+function toTileCodes(values: string[]): TileCode[] {
+  return values.filter(isTileCode);
+}
+
+function hasFourPhysicalCopies(tile: string, currentTiles: string[]) {
+  if (!isTileCode(tile)) return true;
+  const base = baseTileCode(tile);
+  return currentTiles.filter((value) => isTileCode(value) && baseTileCode(value) === base).length >= 4;
+}
+
+function formatPaymentSummary(params: {
+  han: number;
+  fu: number;
+  isDealer: boolean;
+  winMethod: WinMethod;
+  honba: number;
+}) {
+  const result = calculatePoint(params);
+  if (params.winMethod === 'ron') return formatPoints(result.payments.ron);
+  if (params.isDealer) return `${(result.payments.tsumoAllPays ?? 0).toLocaleString('zh-CN')} all`;
+  return `${(result.payments.tsumoNonDealerPays ?? 0).toLocaleString('zh-CN')} / ${(result.payments.tsumoDealerPays ?? 0).toLocaleString('zh-CN')}`;
+}
+
+async function copyLocalText(text: string, onDone: (message: string) => void) {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      onDone('已复制到剪贴板');
+      return;
+    }
+  } catch {
+    // Fall through to prompt fallback for embedded browsers.
+  }
+
+  window.prompt('复制文本', text);
+  onDone('已打开复制文本');
+}
 
 export function ChatScorePage() {
   return (
     <div className="mj-page-stack mj-chat-design">
+      <Alert icon={<AlertCircle aria-hidden="true" />} tone="warning" title="保留入口">
+        聊天式点数计算仍按本轮目标排除，避免把未验证的多轮对话理解误当成可靠算分。
+      </Alert>
+
       <section className="mj-chat-flow-card">
         <div className="mj-step-row">
           {['手牌', '和牌', '宝牌', '确认'].map((step, index) => (
@@ -54,7 +149,7 @@ export function ChatScorePage() {
           </div>
           <div className="mj-chat-bubble mj-chat-bubble--user mj-chat-bubble--tiles">
             <strong>二三四万 345筒 678索 东东中</strong>
-            <TileStrip tileSize="sm" tiles={['m2', 'm3', 'm4', 'p3', 'p4', 'p5r', 's6', 's7', 's8', 'z1', 'z1', 'z7']} />
+            <TileStrip tileSize="sm" tiles={CHAT_SAMPLE_HAND} />
           </div>
           <div className="mj-chat-bubble mj-chat-bubble--assistant">
             请选择和牌方式，并确认场风/自风。
@@ -80,231 +175,502 @@ export function ChatScorePage() {
           </ActionButton>
         </div>
       </section>
-
-      <section className="mj-summary-card mj-summary-card--outlined">
-        <h2>确认摘要</h2>
-        <p>手牌 14 张 · 荣和 · 东场南家 · 宝牌 1 · 额外役：立直</p>
-        <ActionButton fullWidth icon={<Check aria-hidden="true" />}>
-          开始计算
-        </ActionButton>
-      </section>
     </div>
   );
 }
 
 export function LegacyScorePage() {
+  const [selectedYaku, setSelectedYaku] = useState<string[]>(['sanrenkou']);
+  const [customName, setCustomName] = useState('');
+  const [customHan, setCustomHan] = useState(0);
+  const [isDealer, setIsDealer] = useState(false);
+  const [winMethod, setWinMethod] = useState<WinMethod>('ron');
+  const [honba, setHonba] = useState(0);
+  const totalHan = selectedYaku.reduce((sum, id) => sum + (LEGACY_YAKU.find((yaku) => yaku.id === id)?.han ?? 0), 0) + (customName.trim() ? customHan : 0);
+  const legalFu = getLegalFuOptions(Math.max(1, Math.min(13, totalHan || 1)));
+  const [fu, setFu] = useState<FuValue>(40);
+  const safeFu = legalFu.includes(fu) ? fu : legalFu[0] ?? 30;
+  const canCalculate = totalHan > 0;
+  const result = canCalculate
+    ? calculatePoint({ han: totalHan, fu: safeFu, isDealer, winMethod, honba })
+    : null;
+
+  const toggleYaku = (id: string) => {
+    setSelectedYaku((value) => (value.includes(id) ? value.filter((item) => item !== id) : [...value, id]));
+  };
+
   return (
     <div className="mj-page-stack mj-legacy-page">
       <SectionCard title="地方役 / 古役">
         <div className="mj-chip-row">
-          {['大车轮', '大竹林', '大数邻', '三连刻', '一色四顺', '十三不塔'].map((label, index) => (
-            <Chip key={label} selected={index === 0} tone={index === 0 ? 'warning' : 'default'}>
-              {label}
+          {LEGACY_YAKU.map((yaku) => (
+            <Chip key={yaku.id} selected={selectedYaku.includes(yaku.id)} tone={yaku.han >= 13 ? 'danger' : 'warning'} onClick={() => toggleYaku(yaku.id)}>
+              {yaku.name}
             </Chip>
           ))}
         </div>
-        <div className="mj-legacy-custom-row">
-          <span>自定义古役名</span>
-          <b>2番</b>
+        <DataTable
+          columns={[
+            { id: 'name', header: '役' },
+            { id: 'han', header: '番值', align: 'center' },
+            { id: 'note', header: '口径' },
+          ]}
+          rows={LEGACY_YAKU.filter((yaku) => selectedYaku.includes(yaku.id)).map((yaku) => ({
+            id: yaku.id,
+            name: yaku.name,
+            han: yaku.han >= 13 ? '役满' : `${yaku.han}番`,
+            note: yaku.note,
+          }))}
+          rowKey={(row) => String(row.id)}
+        />
+      </SectionCard>
+
+      <SectionCard title="自定义古役">
+        <div className="mj-inline-form-grid">
+          <label>
+            <span>古役名</span>
+            <input value={customName} placeholder="例如 一色三顺" onChange={(event) => setCustomName(event.target.value)} />
+          </label>
+          <label>
+            <span>番值</span>
+            <input
+              inputMode="numeric"
+              max={26}
+              min={0}
+              type="number"
+              value={customHan}
+              onChange={(event) => setCustomHan(Math.max(0, Math.min(26, Number(event.target.value) || 0)))}
+            />
+          </label>
         </div>
       </SectionCard>
 
       <SectionCard title="估算条件">
-        {[
-          ['亲闲', '闲家', '亲家'],
-          ['和牌', '自摸', '荣和'],
-          ['符数', '40符', '20/25/30/50'],
-          ['役满倍数', '单倍', '双倍/三倍'],
-        ].map(([label, active, muted]) => (
-          <div key={label} className="mj-info-row">
-            <span>{label}</span>
-            <span className="mj-info-row__chips">
-              <Chip selected>{active}</Chip>
-              <Chip>{muted}</Chip>
-            </span>
-          </div>
-        ))}
+        <div className="mj-info-row">
+          <span>亲闲</span>
+          <span className="mj-info-row__chips">
+            <Chip selected={!isDealer} onClick={() => setIsDealer(false)}>闲家</Chip>
+            <Chip selected={isDealer} onClick={() => setIsDealer(true)}>亲家</Chip>
+          </span>
+        </div>
+        <div className="mj-info-row">
+          <span>和牌</span>
+          <span className="mj-info-row__chips">
+            <Chip selected={winMethod === 'ron'} onClick={() => setWinMethod('ron')}>荣和</Chip>
+            <Chip selected={winMethod === 'tsumo'} onClick={() => setWinMethod('tsumo')}>自摸</Chip>
+          </span>
+        </div>
+        <div className="mj-info-row">
+          <span>符数</span>
+          <span className="mj-info-row__chips">
+            {legalFu.slice(0, 6).map((option) => (
+              <Chip key={option} selected={safeFu === option} onClick={() => setFu(option)}>{option}符</Chip>
+            ))}
+          </span>
+        </div>
+        <div className="mj-info-row">
+          <span>本场</span>
+          <span className="mj-info-row__chips">
+            {[0, 1, 2, 3].map((value) => (
+              <Chip key={value} selected={honba === value} onClick={() => setHonba(value)}>{value}本场</Chip>
+            ))}
+          </span>
+        </div>
       </SectionCard>
 
       <div className="mj-score-hero">
         <span>估算点数</span>
-        <strong>8,000</strong>
-        <small>闲家自摸：2000 / 4000 · 古役 2番40符</small>
+        <strong>{result ? (result.payments.totalGain).toLocaleString('zh-CN') : '-'}</strong>
+        <small>{canCalculate ? `${totalHan >= 13 ? result?.limitLabel ?? '役满' : `${totalHan}番${safeFu}符`} · ${isDealer ? '亲家' : '闲家'}${winMethod === 'ron' ? '荣和' : '自摸'}` : '请选择至少一个古役'}</small>
       </div>
 
-      <Alert icon={<AlertCircle aria-hidden="true" />} tone="warning" title="三麻规则警告">
-        拔北和北宝牌按当前规则估算。
+      {result ? (
+        <PaymentCards
+          items={[
+            {
+              id: 'payment',
+              label: winMethod === 'ron' ? '荣和支付' : '自摸支付',
+              value: formatPaymentSummary({ han: totalHan, fu: safeFu, isDealer, winMethod, honba }),
+              caption: result.limitLabel ?? '普通手',
+              tone: 'success',
+            },
+          ]}
+        />
+      ) : null}
+
+      <Alert icon={<AlertCircle aria-hidden="true" />} tone="warning" title="规则口径">
+        古役和地方役没有统一标准，本页只按手动选择的番值进入点数公式，不自动判定牌型。
       </Alert>
     </div>
   );
 }
 
+function roundLabel(roundIndex: number) {
+  const wind = ['东', '南', '西', '北'][Math.floor(roundIndex / 4) % 4];
+  return `${wind}${(roundIndex % 4) + 1}局`;
+}
+
+function updatePlayerScore(players: PlayerState[], id: SeatId, delta: number) {
+  return players.map((player) => (player.id === id ? { ...player, score: player.score + delta } : player));
+}
+
 export function TableRecordsPage() {
-  const rows = [
-    { id: 'east', wind: '东', name: '石', score: '32100', badge: '亲家', tone: 'green' },
-    { id: 'south', wind: '南', name: '林', score: '27800', badge: '赢家', tone: 'green' },
-    { id: 'west', wind: '西', name: '陈', score: '22600', badge: '放铳', tone: 'red' },
-    { id: 'north', wind: '北', name: '王', score: '17500', badge: '调整', tone: 'muted' },
-  ];
+  const [players, setPlayers] = useState<PlayerState[]>(INITIAL_PLAYERS);
+  const [dealerIndex, setDealerIndex] = useState(0);
+  const [roundIndex, setRoundIndex] = useState(0);
+  const [honba, setHonba] = useState(0);
+  const [outcome, setOutcome] = useState<RecordOutcome>('ron');
+  const [winner, setWinner] = useState<SeatId>('south');
+  const [loser, setLoser] = useState<SeatId>('west');
+  const [han, setHan] = useState(4);
+  const [fu, setFu] = useState<FuValue>(30);
+  const [adjustSeat, setAdjustSeat] = useState<SeatId>('east');
+  const [adjustAmount, setAdjustAmount] = useState(1000);
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const dealerId = SEAT_IDS[dealerIndex % 4];
+  const legalFu = getLegalFuOptions(han);
+  const safeFu = legalFu.includes(fu) ? fu : legalFu[0] ?? 30;
+  const point = calculatePoint({ han, fu: safeFu, isDealer: winner === dealerId, winMethod: outcome === 'tsumo' ? 'tsumo' : 'ron', honba });
+  const totalScore = players.reduce((sum, player) => sum + player.score, 0);
+
+  const snapshot = () => ({ players, dealerIndex, roundIndex, honba });
+  const selectWinner = (seat: SeatId) => {
+    setWinner(seat);
+    if (loser === seat) {
+      setLoser(SEAT_IDS.find((candidate) => candidate !== seat) ?? 'east');
+    }
+  };
+
+  const advanceRound = (winnerSeat?: SeatId) => {
+    if (winnerSeat && winnerSeat === dealerId) {
+      setHonba((value) => value + 1);
+      return;
+    }
+    setDealerIndex((value) => value + 1);
+    setRoundIndex((value) => value + 1);
+    setHonba(0);
+  };
+
+  const pushHistory = (title: string, delta: string, before = snapshot()) => {
+    setHistory((value) => [
+      {
+        id: `${Date.now()}-${value.length}`,
+        title,
+        meta: `${roundLabel(roundIndex)} ${honba}本场`,
+        delta,
+        snapshot: before,
+      },
+      ...value,
+    ]);
+  };
+
+  const applyRecord = () => {
+    const before = snapshot();
+    if (outcome === 'draw') {
+      pushHistory('流局', '本场+1', before);
+      setHonba((value) => value + 1);
+      return;
+    }
+
+    if (outcome === 'adjust') {
+      setPlayers((value) => updatePlayerScore(value, adjustSeat, adjustAmount));
+      pushHistory(`${SEAT_LABELS[adjustSeat]}家手动调整`, `${adjustAmount > 0 ? '+' : ''}${adjustAmount}`, before);
+      return;
+    }
+
+    if (outcome === 'ron') {
+      const effectiveLoser = loser === winner ? SEAT_IDS.find((seat) => seat !== winner) ?? loser : loser;
+      const payment = point.payments.ron ?? 0;
+      setPlayers((value) => updatePlayerScore(updatePlayerScore(value, winner, payment), effectiveLoser, -payment));
+      pushHistory(`${SEAT_LABELS[winner]}家 荣和 ${SEAT_LABELS[effectiveLoser]}家`, `+${payment}`, before);
+      advanceRound(winner);
+      return;
+    }
+
+    const nextPlayers = players.reduce((current, player) => {
+      if (player.id === winner) return current;
+      const loss = winner === dealerId ? point.payments.tsumoAllPays ?? 0 : player.id === dealerId ? point.payments.tsumoDealerPays ?? 0 : point.payments.tsumoNonDealerPays ?? 0;
+      return updatePlayerScore(current, player.id, -loss);
+    }, players);
+    setPlayers(updatePlayerScore(nextPlayers, winner, point.payments.totalGain));
+    pushHistory(`${SEAT_LABELS[winner]}家 自摸`, `+${point.payments.totalGain}`, before);
+    advanceRound(winner);
+  };
+
+  const undo = () => {
+    const [latest, ...rest] = history;
+    if (!latest) return;
+    setPlayers(latest.snapshot.players);
+    setDealerIndex(latest.snapshot.dealerIndex);
+    setRoundIndex(latest.snapshot.roundIndex);
+    setHonba(latest.snapshot.honba);
+    setHistory(rest);
+  };
+
+  const clear = () => {
+    setPlayers(INITIAL_PLAYERS);
+    setDealerIndex(0);
+    setRoundIndex(0);
+    setHonba(0);
+    setHistory([]);
+  };
 
   return (
     <div className="mj-page-stack mj-table-records-page">
       <div className="mj-table-record-stats">
         <span>
           <small>局数</small>
-          <strong>东二局</strong>
+          <strong>{roundLabel(roundIndex)}</strong>
         </span>
         <span>
           <small>本场</small>
-          <strong>1本场</strong>
+          <strong>{honba}本场</strong>
         </span>
         <span>
-          <small>供托</small>
-          <strong>供托2</strong>
+          <small>合计</small>
+          <strong>{totalScore.toLocaleString('zh-CN')}</strong>
         </span>
       </div>
 
       <SectionCard className="mj-table-seat-card" title="四人桌">
         <div className="mj-player-score-list">
-          {rows.map((row) => (
-            <div key={row.id} className={`mj-player-score-row mj-player-score-row--${row.tone}`}>
-              <span className="mj-wind-dot">{row.wind}</span>
-              <b>{row.name}</b>
-              <strong>{row.score}</strong>
-              <small>{row.badge}</small>
-            </div>
-          ))}
+          {players.map((player) => {
+            const badge = player.id === dealerId ? '亲家' : player.id === winner && outcome !== 'draw' ? '赢家' : player.id === loser && outcome === 'ron' ? '放铳' : '记录';
+            const tone = badge === '放铳' ? 'red' : badge === '记录' ? 'muted' : 'green';
+            return (
+              <div key={player.id} className={`mj-player-score-row mj-player-score-row--${tone}`}>
+                <span className="mj-wind-dot">{player.wind}</span>
+                <input
+                  aria-label={`${player.wind}家名称`}
+                  className="mj-record-name-input"
+                  value={player.name}
+                  onChange={(event) => setPlayers((value) => value.map((item) => (item.id === player.id ? { ...item, name: event.target.value } : item)))}
+                />
+                <strong>{player.score.toLocaleString('zh-CN')}</strong>
+                <small>{badge}</small>
+              </div>
+            );
+          })}
         </div>
       </SectionCard>
 
       <SectionCard className="mj-round-record-card" title="记录一手">
         <div className="mj-chip-row">
-          {['荣和', '自摸', '流局', '手动调整'].map((label, index) => (
-            <Chip key={label} selected={index === 0}>
+          {[
+            ['ron', '荣和'],
+            ['tsumo', '自摸'],
+            ['draw', '流局'],
+            ['adjust', '手动调整'],
+          ].map(([value, label]) => (
+            <Chip key={value} selected={outcome === value} onClick={() => setOutcome(value as RecordOutcome)}>
               {label}
             </Chip>
           ))}
         </div>
-        {[
-          ['赢家', '林', '选择'],
-          ['放铳者', '陈', '无'],
-          ['番符', '4番30符', '自动建议'],
-          ['支付值', '7700', '手动覆盖'],
-        ].map(([label, value, action]) => (
-          <div key={label} className="mj-record-form-row">
-            <span>{label}</span>
-            <strong>{value}</strong>
-            <small>{action}</small>
+
+        {outcome === 'adjust' ? (
+          <div className="mj-inline-form-grid">
+            <label>
+              <span>座位</span>
+              <select value={adjustSeat} onChange={(event) => setAdjustSeat(event.target.value as SeatId)}>
+                {SEAT_IDS.map((seat) => <option key={seat} value={seat}>{SEAT_LABELS[seat]}家</option>)}
+              </select>
+            </label>
+            <label>
+              <span>调整点</span>
+              <input type="number" value={adjustAmount} onChange={(event) => setAdjustAmount(Number(event.target.value) || 0)} />
+            </label>
           </div>
-        ))}
+        ) : null}
+
+        {outcome === 'ron' || outcome === 'tsumo' ? (
+          <>
+            <div className="mj-record-form-row">
+              <span>赢家</span>
+              <span className="mj-info-row__chips">
+                {SEAT_IDS.map((seat) => (
+                  <Chip key={seat} selected={winner === seat} onClick={() => selectWinner(seat)}>{SEAT_LABELS[seat]}</Chip>
+                ))}
+              </span>
+            </div>
+            {outcome === 'ron' ? (
+              <div className="mj-record-form-row">
+                <span>放铳者</span>
+                <span className="mj-info-row__chips">
+                  {SEAT_IDS.filter((seat) => seat !== winner).map((seat) => (
+                    <Chip key={seat} selected={loser === seat} onClick={() => setLoser(seat)}>{SEAT_LABELS[seat]}</Chip>
+                  ))}
+                </span>
+              </div>
+            ) : null}
+            <div className="mj-record-form-row">
+              <span>番符</span>
+              <strong>{han}番{safeFu}符</strong>
+              <small>{formatPaymentSummary({ han, fu: safeFu, isDealer: winner === dealerId, winMethod: outcome === 'tsumo' ? 'tsumo' : 'ron', honba })}</small>
+            </div>
+            <div className="mj-chip-row">
+              {[1, 2, 3, 4, 5, 6].map((value) => (
+                <Chip key={value} selected={han === value} onClick={() => setHan(value)}>{value === 5 ? '满贯' : `${value}番`}</Chip>
+              ))}
+            </div>
+            <div className="mj-chip-row">
+              {legalFu.slice(0, 6).map((value) => (
+                <Chip key={value} selected={safeFu === value} onClick={() => setFu(value)}>{value}符</Chip>
+              ))}
+            </div>
+          </>
+        ) : null}
+
+        <ActionButton fullWidth icon={<Check aria-hidden="true" />} onClick={applyRecord}>
+          写入流水
+        </ActionButton>
       </SectionCard>
 
-      <Alert icon={<AlertCircle aria-hidden="true" />} tone="success" title="总点校验">
-        当前合计 100000 点，供托 2000 点，校验通过。
+      <Alert icon={<AlertCircle aria-hidden="true" />} tone={totalScore === 100000 ? 'success' : 'warning'} title="总点校验">
+        当前玩家合计 {totalScore.toLocaleString('zh-CN')} 点。
       </Alert>
 
       <SectionCard className="mj-history-card" title="历史流水">
-        <div className="mj-history-list">
-          {[
-            ['东一局 0本场', '石 立直荣和 王', '+3900'],
-            ['东一局 1本场', '流局 三家听牌', '供托+1'],
-            ['东二局 1本场', '林 荣和 陈', '+7700'],
-          ].map(([meta, title, delta]) => (
-            <div key={title} className="mj-history-row">
-              <span>
-                <small>{meta}</small>
-                <strong>{title}</strong>
-              </span>
-              <b>{delta}</b>
-            </div>
-          ))}
-        </div>
+        <DataTable
+          columns={[
+            { id: 'meta', header: '局' },
+            { id: 'title', header: '内容' },
+            { id: 'delta', header: '变动', align: 'right' },
+          ]}
+          rows={history.map((item) => ({ id: item.id, meta: item.meta, title: item.title, delta: item.delta }))}
+          rowKey={(row) => String(row.id)}
+        />
       </SectionCard>
 
       <div className="mj-button-row mj-button-row--two">
-        <ActionButton className="mj-record-white-action" icon={<RotateCcw aria-hidden="true" />} variant="ghost">
+        <ActionButton className="mj-record-white-action" disabled={history.length === 0} icon={<RotateCcw aria-hidden="true" />} variant="ghost" onClick={undo}>
           撤销上一条
         </ActionButton>
-        <ActionButton className="mj-action-button--soft-danger" icon={<Trash2 aria-hidden="true" />} variant="ghost">
+        <ActionButton className="mj-action-button--soft-danger" icon={<Trash2 aria-hidden="true" />} variant="ghost" onClick={clear}>
           清空本桌
         </ActionButton>
       </div>
-
-      <section className="mj-danger-confirm-card">
-        <h2>确认清空本桌？</h2>
-        <p>将删除当前四人桌昵称、起始点、局数和全部流水。</p>
-        <div className="mj-button-row mj-button-row--two">
-          <ActionButton className="mj-record-white-action" icon={<X aria-hidden="true" />} variant="ghost">
-            取消
-          </ActionButton>
-          <ActionButton icon={<Trash2 aria-hidden="true" />} variant="danger">
-            确认清空
-          </ActionButton>
-        </div>
-      </section>
     </div>
   );
 }
 
 export function HandRecognitionPage() {
-  const correctionTiles = ['m1', 'm2', 'm3', 'm4', 'm5r', 'm6', 'm7', 'm8', 'm9', 'z7'];
+  const [imageDataUrl, setImageDataUrl] = useState('');
+  const [tiles, setTiles] = useState<TileCode[]>([]);
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
+  const [message, setMessage] = useState('');
+
+  const handleFile = (file: File | undefined) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setImageDataUrl(String(reader.result ?? ''));
+      setMessage('图片已载入，请用牌键盘确认最终牌序');
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const copyTiles = () => {
+    const text = tiles.map(tileLabel).join(' ');
+    void copyLocalText(text || '未选择牌', setMessage);
+  };
 
   return (
     <div className="mj-page-stack mj-hand-recognition-page">
       <div className="mj-button-row mj-button-row--two">
-        <ActionButton icon={<Camera aria-hidden="true" />}>拍照识别</ActionButton>
-        <ActionButton className="mj-gallery-button" icon={<ImageIcon aria-hidden="true" />} variant="secondary">
-          相册选择
-        </ActionButton>
+        <label className="mj-upload-action">
+          <Camera aria-hidden="true" />
+          <span>拍照导入</span>
+          <input accept="image/*" capture="environment" type="file" onChange={(event) => handleFile(event.target.files?.[0])} />
+        </label>
+        <label className="mj-upload-action mj-upload-action--secondary">
+          <ImageIcon aria-hidden="true" />
+          <span>相册选择</span>
+          <input accept="image/*" type="file" onChange={(event) => handleFile(event.target.files?.[0])} />
+        </label>
       </div>
 
       <SectionCard className="mj-recognition-preview-card">
-        <div className="mj-scan-preview">
-          <ScanFrameIcon />
-          <span>识别图片预览区域</span>
+        <div className={imageDataUrl ? 'mj-scan-preview mj-scan-preview--image' : 'mj-scan-preview'}>
+          {imageDataUrl ? <img alt="待确认的手牌照片" src={imageDataUrl} /> : <ScanFrameIcon />}
+          {!imageDataUrl ? <span>导入照片后在本地预览</span> : null}
         </div>
       </SectionCard>
 
-      <SectionCard className="mj-recognition-result-card" title="识别结果">
-        <TileStrip tileSize="sm" tiles={sampleHand} />
+      <SectionCard className="mj-recognition-result-card" title="最终牌序">
+        <TileStrip
+          emptyLabel="尚未确认牌序"
+          maxSlots={14}
+          tileSize="sm"
+          tiles={tiles}
+          onRemove={(index) => setTiles(tiles.filter((_, currentIndex) => currentIndex !== index))}
+        />
+        <ActionButton fullWidth icon={<Keyboard aria-hidden="true" />} onClick={() => setKeyboardOpen(true)}>
+          打开牌键盘修正
+        </ActionButton>
       </SectionCard>
 
-      <Alert icon={<AlertCircle aria-hidden="true" />} tone="warning" title="识别警告">
-        第 5 张置信度较低，请点按单张牌进行修正。
-      </Alert>
-      <Alert icon={<AlertCircle aria-hidden="true" />} tone="danger" title="识别错误">
-        图片过暗或牌面遮挡，请重新拍摄或手动输入。
+      <Alert icon={<AlertCircle aria-hidden="true" />} tone="info" title="本地处理">
+        本页不会上传照片；牌序以你确认后的输入为准，同一物理牌最多 4 枚。
       </Alert>
 
-      <SectionCard title="手动修正">
-        <div className="mj-tile-choice-grid">
-          {correctionTiles.map((tile) => (
-            <MahjongTile key={tile} code={tile} selected={tile === 'm5r'} size="lg" />
-          ))}
-        </div>
-      </SectionCard>
-
-      <ActionButton fullWidth icon={<Copy aria-hidden="true" />}>
+      <ActionButton disabled={tiles.length === 0} fullWidth icon={<Copy aria-hidden="true" />} onClick={copyTiles}>
         复制最终牌序
       </ActionButton>
+      {message ? <Alert tone="success">{message}</Alert> : null}
+
+      <TileKeyboard
+        allowRedFives
+        maxTiles={14}
+        open={keyboardOpen}
+        previewLabel="最终牌序"
+        tiles={tiles}
+        title="修正实体手牌"
+        isTileDisabled={hasFourPhysicalCopies}
+        onChange={(value) => setTiles(toTileCodes(value))}
+        onClose={() => setKeyboardOpen(false)}
+        onDone={() => setKeyboardOpen(false)}
+      />
     </div>
   );
 }
 
 export function TileKeyboardDemoPage() {
   const [suit, setSuit] = useState<'m' | 'p' | 's' | 'z'>('m');
-  const tiles = suit === 'z' ? ['z1', 'z2', 'z3', 'z4', 'z5', 'z6', 'z7'] : Array.from({ length: 9 }, (_, index) => `${suit}${index + 1}`);
+  const [tiles, setTiles] = useState<TileCode[]>([]);
+  const [message, setMessage] = useState('');
+  const gridTiles = useMemo(() => {
+    if (suit === 'z') return ['z1', 'z2', 'z3', 'z4', 'z5', 'z6', 'z7'] as TileCode[];
+    return Array.from({ length: 9 }, (_, index) => `${suit}${index + 1}` as TileCode);
+  }, [suit]);
+
+  const addTile = (tile: TileCode) => {
+    if (tiles.length >= 14 || hasFourPhysicalCopies(tile, tiles)) return;
+    setTiles((value) => [...value, tile]);
+  };
+
+  const copyTiles = () => {
+    void copyLocalText(tiles.join(' '), setMessage);
+  };
 
   return (
     <div className="mj-page-stack mj-keyboard-demo-page">
       <SectionCard title="手牌预览">
-        <TileStrip tileSize="sm" tiles={['m1', 'm2', 'm3', 'p4', 'p5r', 'p8', 'z1', 'z1']} />
+        <TileStrip
+          emptyLabel="点击下方牌面输入"
+          maxSlots={14}
+          tileSize="sm"
+          tiles={tiles}
+          onRemove={(index) => setTiles(tiles.filter((_, currentIndex) => currentIndex !== index))}
+        />
       </SectionCard>
-      <Alert icon={<AlertCircle aria-hidden="true" />} tone="warning" title="最大张数限制">
-        当前目标最多 14 张，超过时保持输入并提示原因。
-      </Alert>
-      <section className="mj-inline-keyboard" aria-label="牌输入键盘示例">
-        <h2>选择手牌 11/14</h2>
+      {tiles.length >= 14 ? (
+        <Alert icon={<AlertCircle aria-hidden="true" />} tone="warning" title="最大张数限制">
+          当前目标最多 14 张，请删除一张后再继续输入。
+        </Alert>
+      ) : null}
+      <section className="mj-inline-keyboard" aria-label="牌输入键盘">
+        <h2>选择手牌 {tiles.length}/14</h2>
         <SegmentedControl
           ariaLabel="选择花色"
           options={[
@@ -317,22 +683,34 @@ export function TileKeyboardDemoPage() {
           onChange={(value) => setSuit(value as 'm' | 'p' | 's' | 'z')}
         />
         <div className="mj-tile-choice-grid">
-          {tiles.map((tile) => (
-            <MahjongTile key={tile} code={tile} selected={tile === 'm5'} size="lg" />
-          ))}
+          {gridTiles.map((tile) => {
+            const count = tiles.filter((value) => baseTileCode(value) === baseTileCode(tile)).length;
+            return (
+              <MahjongTile
+                key={tile}
+                code={tile}
+                count={count > 0 ? count : undefined}
+                disabled={tiles.length >= 14 || count >= 4}
+                selected={count > 0}
+                size="lg"
+                onClick={() => addTile(tile)}
+              />
+            );
+          })}
         </div>
         <div className="mj-tile-keyboard__actions">
-          <ActionButton icon={<Trash2 aria-hidden="true" />} variant="ghost">
+          <ActionButton disabled={tiles.length === 0} icon={<Trash2 aria-hidden="true" />} variant="ghost" onClick={() => setTiles((value) => value.slice(0, -1))}>
             退格
           </ActionButton>
-          <ActionButton className="mj-action-button--soft-danger" icon={<Trash2 aria-hidden="true" />} variant="ghost">
+          <ActionButton className="mj-action-button--soft-danger" disabled={tiles.length === 0} icon={<Trash2 aria-hidden="true" />} variant="ghost" onClick={() => setTiles([])}>
             清空
           </ActionButton>
-          <ActionButton fullWidth icon={<Check aria-hidden="true" />}>
-            完成
+          <ActionButton disabled={tiles.length === 0} fullWidth icon={<Copy aria-hidden="true" />} onClick={copyTiles}>
+            复制
           </ActionButton>
         </div>
       </section>
+      {message ? <Alert tone="success">{message}</Alert> : null}
     </div>
   );
 }
@@ -340,25 +718,10 @@ export function TileKeyboardDemoPage() {
 export function DesignedPlaceholderPage({ navigate }: PageProps) {
   return (
     <div className="mj-page-stack mj-placeholder-designed-page">
-      <PlaceholderPanel
-        icon={<Hammer aria-hidden="true" />}
-        title="功能建设中"
-        description="该入口已预留页面结构，等待对应任务完成后接入真实功能。"
-        statusLabel={null}
-      />
-      <SectionCard className="mj-task-info-card" title="任务信息">
-        <div className="mj-info-row">
-          <span>功能标题</span>
-          <strong>AI 牌谱复盘</strong>
-        </div>
-        <div className="mj-info-row">
-          <span>当前状态</span>
-          <strong>排期中</strong>
-        </div>
-        <div className="mj-info-row">
-          <span>下一步</span>
-          <strong>补充规则和交互流</strong>
-        </div>
+      <SectionCard title="没有匹配的页面">
+        <Alert icon={<AlertCircle aria-hidden="true" />} tone="warning">
+          当前入口没有绑定到可用功能，请返回首页重新选择。
+        </Alert>
       </SectionCard>
       <ActionButton fullWidth icon={<Home aria-hidden="true" />} onClick={() => navigate('home')}>
         返回首页
@@ -375,26 +738,5 @@ function ScanFrameIcon() {
       <span />
       <span />
     </span>
-  );
-}
-
-export function ScorePracticePreview() {
-  return (
-    <PracticeAnswerPanel
-      status="wrong"
-      title="本题需要复盘"
-      userAnswer="3,900 点"
-      correctAnswer="0 点"
-      breakdown={<p>若题目没有役，正确答案为 0。</p>}
-      actions={<ActionButton icon={<Sparkles aria-hidden="true" />}>下一题</ActionButton>}
-    />
-  );
-}
-
-export function ClipboardNotice() {
-  return (
-    <Alert tone="info" title="本地预览">
-      页面控件保留交互外观，不会上传图片、发送聊天内容或保存对局数据。
-    </Alert>
   );
 }

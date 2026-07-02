@@ -40,9 +40,6 @@ import {
 type KeyboardTarget = 'hand' | 'dora' | 'ura' | 'meld';
 type QuickComputation = ScoreComputation | { kind: 'empty' };
 
-const DESIGN_HAND_TILES: TileCode[] = ['m2', 'm3', 'm4', 'p2', 'p4', 'p5r', 's5', 's6', 's7', 'z1', 'z1', 'z7'];
-const DESIGN_EFFECTIVE_TILES: TileCode[] = ['m1', 'm2', 'p2', 'p4', 's6', 's7', 'z1'];
-
 const MELD_KIND_OPTIONS: Array<{ value: MeldKind; label: string; tiles: number }> = [
   { value: 'chi', label: '吃', tiles: 3 },
   { value: 'pon', label: '碰', tiles: 3 },
@@ -135,7 +132,7 @@ async function copyResult(text: string, onDone: (message: string) => void) {
 
 export function QuickScorePage() {
   const [mode, setMode] = useState<ScoreMode>('yonma');
-  const [handTiles, setHandTiles] = useState<TileCode[]>(DESIGN_HAND_TILES);
+  const [handTiles, setHandTiles] = useState<TileCode[]>([]);
   const [melds, setMelds] = useState<MeldInput[]>([]);
   const [meldKind, setMeldKind] = useState<MeldKind>('chi');
   const [meldDraftTiles, setMeldDraftTiles] = useState<TileCode[]>([]);
@@ -143,7 +140,7 @@ export function QuickScorePage() {
   const [uraDoraIndicators, setUraDoraIndicators] = useState<TileCode[]>([]);
   const [roundWind, setRoundWind] = useState<Wind>('east');
   const [seatWind, setSeatWind] = useState<Wind>('south');
-  const [honba, setHonba] = useState(1);
+  const [honba, setHonba] = useState(0);
   const [northDoraCount, setNorthDoraCount] = useState<0 | 1 | 2 | 3 | 4>(0);
   const [doubleWindPairTwoFu, setDoubleWindPairTwoFu] = useState(false);
   const [conditions, setConditions] = useState<ScoreConditions>({ ...DEFAULT_SCORE_CONDITIONS });
@@ -246,19 +243,9 @@ export function QuickScorePage() {
     setConditions((value) => ({ ...value, [key]: !value[key] }));
   };
 
-  const isDesignPreset =
-    handTiles.join(',') === DESIGN_HAND_TILES.join(',') &&
-    melds.length === 0 &&
-    doraIndicators.length === 0 &&
-    uraDoraIndicators.length === 0 &&
-    mode === 'yonma' &&
-    !conditions.tsumo &&
-    honba === 1 &&
-    northDoraCount === 0 &&
-    roundWind === 'east' &&
-    seatWind === 'south';
-
   const resultText = makeResultText(computation);
+  const noYakuWarnings = computation.kind === 'score' && !computation.result.valid ? computation.result.warnings : [];
+  const invalidErrors = computation.kind === 'invalid' ? computation.errors : [];
 
   return (
     <div className="mj-page-stack mj-quick-page">
@@ -281,7 +268,7 @@ export function QuickScorePage() {
       <section className="mj-design-card mj-quick-hand-card">
         <header className="mj-design-card__header">
           <h2>手牌与副露</h2>
-          <span>{isDesignPreset ? '11/14' : `${handTiles.length}/${expectedClosedTiles}`}</span>
+          <span>{handTiles.length}/{expectedClosedTiles}</span>
         </header>
         <div className="mj-quick-tile-row" aria-label="当前手牌">
           {handTiles.length > 0 ? (
@@ -419,20 +406,30 @@ export function QuickScorePage() {
               {option.label}
             </Chip>
           ))}
-          <Chip onClick={() => setCopyMessage('流局满贯暂不参与快速算分')}>流局满贯</Chip>
+          <Chip onClick={() => setCopyMessage('流局满贯需要特殊规则确认，当前不会写入结果')}>流局满贯</Chip>
         </div>
       </section>
 
-      <Alert icon={<AlertCircle aria-hidden="true" />} tone="danger" title="无役提示">
-        当前牌姿未满足役种；可继续查看向听数与有效牌。
-      </Alert>
+      {noYakuWarnings.length > 0 ? (
+        <Alert icon={<AlertCircle aria-hidden="true" />} tone="danger" title="不能计分">
+          {noYakuWarnings.join('；')}
+        </Alert>
+      ) : null}
 
-      <Alert icon={<AlertCircle aria-hidden="true" />} tone="warning" title="三麻规则差异">
-        拔北、北宝牌与万子缺牌按当前设置估算。
-      </Alert>
+      {invalidErrors.length > 0 ? (
+        <Alert icon={<AlertCircle aria-hidden="true" />} tone="warning" title="输入需要调整">
+          {invalidErrors.join('；')}
+        </Alert>
+      ) : null}
+
+      {mode === 'sanma' ? (
+        <Alert icon={<AlertCircle aria-hidden="true" />} tone="warning" title="三麻规则差异">
+          拔北、北宝牌与万子缺牌按当前设置估算。
+        </Alert>
+      ) : null}
 
       <QuickScorePanel computation={computation} seatWind={seatWind} />
-      <QuickEfficiencyPanel computation={computation} usePreset={isDesignPreset} />
+      <QuickEfficiencyPanel computation={computation} />
 
       <div className="mj-quick-actions-bottom">
         <ActionButton icon={<RotateCcw aria-hidden="true" />} variant="ghost" onClick={reset}>
@@ -442,10 +439,11 @@ export function QuickScorePage() {
           修改
         </ActionButton>
         <ActionButton
+          disabled={!resultText}
           icon={<Share2 aria-hidden="true" />}
           onClick={() =>
             void copyResult(
-              resultText || '日麻算分：闲家荣和 4番30符 满贯\n收入：12,000 点',
+              resultText,
               setCopyMessage,
             )
           }
@@ -523,6 +521,16 @@ function Pill({ selected, children, onClick }: { selected: boolean; children: Re
 }
 
 function QuickScorePanel({ computation, seatWind }: { computation: QuickComputation; seatWind: Wind }) {
+  if (computation.kind === 'empty') {
+    return (
+      <section className="mj-score-hero mj-score-hero--quick mj-score-hero--empty">
+        <span>最终点数</span>
+        <strong>-</strong>
+        <small>录入手牌、和牌方式和场况后显示计算结果</small>
+      </section>
+    );
+  }
+
   if (computation.kind === 'score' && computation.result.valid) {
     const result = computation.result;
     const value = formatPoints(result.payments?.totalGain).replace(' 点', '');
@@ -543,24 +551,26 @@ function QuickScorePanel({ computation, seatWind }: { computation: QuickComputat
     );
   }
 
-  return (
-    <section className="mj-score-hero mj-score-hero--quick">
-      <span>最终点数</span>
-      <strong>12,000</strong>
-      <small>闲家荣和 · 4番30符 · 满贯</small>
-      <div className="mj-score-badges">
-        <b>赢家 +12000</b>
-        <b>放铳 -12000</b>
-      </div>
-    </section>
-  );
+  if (computation.kind === 'efficiency') {
+    return (
+      <section className="mj-score-hero mj-score-hero--quick mj-score-hero--empty">
+        <span>最终点数</span>
+        <strong>-</strong>
+        <small>当前牌姿未组成和牌，已转为向听与有效牌估算</small>
+      </section>
+    );
+  }
+
+  return null;
 }
 
-function QuickEfficiencyPanel({ computation, usePreset }: { computation: QuickComputation; usePreset: boolean }) {
-  const result = !usePreset && computation.kind === 'efficiency' ? computation.result : null;
-  const effectiveTiles = result?.effectiveTiles.slice(0, 7).map((entry) => entry.tile.code) ?? DESIGN_EFFECTIVE_TILES;
-  const shantenText = result ? (result.shanten < 0 ? '听牌/和牌' : `${result.shanten} 向听`) : '1 向听';
-  const countText = result ? `${result.totalEffectiveTileCount} 枚` : '13 枚';
+function QuickEfficiencyPanel({ computation }: { computation: QuickComputation }) {
+  if (computation.kind !== 'efficiency') return null;
+
+  const result = computation.result;
+  const effectiveTiles = result.effectiveTiles.slice(0, 7).map((entry) => entry.tile.code);
+  const shantenText = result.shanten < 0 ? '听牌/和牌' : `${result.shanten} 向听`;
+  const countText = `${result.totalEffectiveTileCount} 枚`;
 
   return (
     <section className="mj-design-card">
@@ -569,9 +579,13 @@ function QuickEfficiencyPanel({ computation, usePreset }: { computation: QuickCo
       </header>
       <p className="mj-efficiency-title">{shantenText} · 有效牌 {countText}</p>
       <div className="mj-quick-tile-row">
-        {effectiveTiles.map((tile, index) => (
-          <MahjongTile key={`${tile}-${index}`} code={tile} size="sm" />
-        ))}
+        {effectiveTiles.length > 0 ? (
+          effectiveTiles.map((tile, index) => (
+            <MahjongTile key={`${tile}-${index}`} code={tile} size="sm" />
+          ))
+        ) : (
+          <span className="mj-muted-line">没有可列出的有效牌</span>
+        )}
       </div>
     </section>
   );

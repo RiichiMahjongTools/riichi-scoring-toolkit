@@ -164,6 +164,7 @@ function HanFuResultCard({
 
 export function HanFuTablePage() {
   const [han, setHan] = useState<HanValue>(3);
+  const [showTable, setShowTable] = useState(true);
   const rows = makeCompactTableRows(han);
 
   return (
@@ -178,25 +179,29 @@ export function HanFuTablePage() {
       </div>
 
       <SectionCard className="mj-hanfu-table-card" title="四麻支付点数">
-        <DataTable
-          columns={[
-            { id: 'fu', header: '符数' },
-            { id: 'childRon', header: '闲荣', align: 'right' },
-            { id: 'childTsumo', header: '闲摸', align: 'right' },
-            { id: 'dealerRon', header: '亲荣', align: 'right' },
-            { id: 'dealerTsumo', header: '亲摸', align: 'right' },
-          ]}
-          rows={rows}
-          rowKey={(row) => String(row.id)}
-        />
+        {showTable ? (
+          <DataTable
+            columns={[
+              { id: 'fu', header: '符数' },
+              { id: 'childRon', header: '闲荣', align: 'right' },
+              { id: 'childTsumo', header: '闲摸', align: 'right' },
+              { id: 'dealerRon', header: '亲荣', align: 'right' },
+              { id: 'dealerTsumo', header: '亲摸', align: 'right' },
+            ]}
+            rows={rows}
+            rowKey={(row) => String(row.id)}
+          />
+        ) : (
+          <p className="mj-muted-line">查询表已隐藏。</p>
+        )}
       </SectionCard>
 
       <Alert icon={<TriangleAlert aria-hidden="true" />} tone="warning" title="不可组合">
         表格中的 -- 表示该番符组合不可直接出现或需按特殊规则处理。
       </Alert>
 
-      <ActionButton fullWidth icon={<EyeOff aria-hidden="true" />} variant="ghost">
-        隐藏查询表
+      <ActionButton fullWidth icon={<EyeOff aria-hidden="true" />} variant="ghost" onClick={() => setShowTable((value) => !value)}>
+        {showTable ? '隐藏查询表' : '显示查询表'}
       </ActionButton>
     </div>
   );

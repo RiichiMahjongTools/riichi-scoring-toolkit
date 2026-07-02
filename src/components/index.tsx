@@ -1102,8 +1102,8 @@ export interface PlaceholderPanelProps extends Omit<HTMLAttributes<HTMLDivElemen
 }
 
 export function PlaceholderPanel({
-  title = '功能建设中',
-  description = '这个模块已经预留入口，具体规则和交互确认后再开放。',
+  title = '页面不可用',
+  description = '当前入口没有绑定到可用页面，请返回首页重新选择。',
   statusLabel = 'Later Scope',
   icon = <Wrench aria-hidden="true" />,
   actions,

@@ -1,4 +1,5 @@
-import { AlertCircle, BookOpen, Calculator, Check, Eye, X } from 'lucide-react';
+import { AlertCircle, BookOpen, Calculator, Check, Eye, Sparkles, X } from 'lucide-react';
+import { useMemo, useState } from 'react';
 
 import {
   ActionButton,
@@ -6,13 +7,28 @@ import {
   Chip,
   DataTable,
   MahjongTile,
+  PracticeAnswerPanel,
   SectionCard,
   TileStrip,
 } from '../components';
+import {
+  FU_PRACTICE_OPTIONS,
+  buildHanFuTableRow,
+  checkChinituWaitAnswer,
+  checkComebackPracticeAnswer,
+  checkFuPracticeAnswer,
+  checkPointPracticeAnswer,
+  generateChinituWaitQuestion,
+  generateComebackPracticeQuestion,
+  generateFuPracticeQuestion,
+  generatePointPracticeQuestion,
+  type FuValue,
+  type PracticeFeedback,
+} from '../domain';
+import { WIND_LABELS, formatComebackAnswer, formatPoints, formatWinMethod } from './shared';
 
-const fuQuestionHand = ['m2', 'm3', 'm4', 'p5', 'p5', 'p8', 'p8', 'p8', 's6', 's7', 's8', 'z3', 'z3', 'z7'];
-const chinitsuHand = ['m1', 'm2', 'm3', 'm3', 'm4', 'm5', 'm5', 'm6', 'm7', 'm8', 'm9', 'm9', 'm9'];
-const chinitsuAnswerTiles = ['m2', 'm5', 'm8'];
+const RANK_LABELS = ['一', '二', '三', '四', '五', '六', '七', '八', '九'];
+const COMEBACK_OPTIONS: Array<FuValue | 'impossible'> = ['impossible', 25, 30, 40, 50, 60, 70, 80, 90, 100, 110];
 
 function PracticeStats({
   items,
@@ -31,226 +47,409 @@ function PracticeStats({
   );
 }
 
+function nextPracticeSeed(
+  setSeed: (updater: (value: number) => number) => void,
+  reset: () => void,
+) {
+  reset();
+  setSeed((value) => value + 1);
+}
+
+function FeedbackBreakdown({ lines }: { lines: readonly string[] }) {
+  return (
+    <ul className="mj-practice-breakdown-list">
+      {lines.map((line) => (
+        <li key={line}>{line}</li>
+      ))}
+    </ul>
+  );
+}
+
 export function ChinitsuPracticePage() {
+  const [seed, setSeed] = useState(0);
+  const [selectedRanks, setSelectedRanks] = useState<number[]>([]);
+  const [feedback, setFeedback] = useState<PracticeFeedback<number[]> | null>(null);
+  const [streak, setStreak] = useState(0);
+  const question = useMemo(() => generateChinituWaitQuestion(seed), [seed]);
+
+  const toggleRank = (rank: number) => {
+    setFeedback(null);
+    setSelectedRanks((value) =>
+      value.includes(rank) ? value.filter((current) => current !== rank) : [...value, rank].sort((a, b) => a - b),
+    );
+  };
+
+  const submit = () => {
+    const result = checkChinituWaitAnswer(question, selectedRanks);
+    setFeedback(result);
+    setStreak((value) => (result.correct ? value + 1 : 0));
+  };
+
+  const answerTiles = (feedback?.correctAnswer ?? question.correctWaits).map((rank) => `${question.suit}${rank}`);
+
   return (
     <div className="mj-page-stack mj-practice-design mj-chinitsu-page">
+      <PracticeStats
+        items={[
+          { label: '题号', value: `第${seed + 1}题` },
+          { label: '状态', value: `连对 ${streak}`, tone: streak > 0 ? 'green' : 'default' },
+          { label: '花色', value: `${RANK_LABELS[0]}-${RANK_LABELS[8]}${question.suit === 'm' ? '万' : question.suit === 'p' ? '筒' : '索'}` },
+        ]}
+      />
+
       <SectionCard title="清一色手牌">
-        <TileStrip tileSize="sm" tiles={chinitsuHand} />
+        <TileStrip tileSize="sm" tiles={question.handTiles.map((tile) => tile.code)} />
       </SectionCard>
 
       <SectionCard title="选择全部听牌 / 有效和牌">
         <div className="mj-chinitsu-answer-grid">
-          {['一', '二', '三', '四', '五', '六', '七', '八', '九'].map((label, index) => {
-            const rank = index + 1;
-            const selected = [2, 4, 5, 8].includes(rank);
+          {question.candidateRanks.map((rank, index) => {
+            const selected = selectedRanks.includes(rank);
+            const isCorrect = Boolean(feedback?.correctAnswer.includes(rank));
+            const isWrong = Boolean(feedback && selected && !isCorrect);
             return (
               <button
-                key={label}
+                key={rank}
                 aria-pressed={selected}
                 className={[
                   'mj-rank-choice',
                   selected && 'mj-rank-choice--selected',
-                  rank === 4 && 'mj-rank-choice--wrong',
+                  feedback && isCorrect && 'mj-rank-choice--correct',
+                  isWrong && 'mj-rank-choice--wrong',
                 ]
                   .filter(Boolean)
                   .join(' ')}
                 type="button"
+                onClick={() => toggleRank(rank)}
               >
-                {label}
+                {RANK_LABELS[index]}
               </button>
             );
           })}
         </div>
       </SectionCard>
 
-      <section className="mj-practice-result-compact mj-practice-result-compact--success">
-        <h2>本题连对 +1</h2>
-        <div className="mj-result-tile-row">
-          {chinitsuAnswerTiles.map((tile) => (
-            <MahjongTile key={tile} code={tile} size="lg" />
-          ))}
-        </div>
-        <p>正确答案：二五八万 · 你的选择：二四五八万</p>
-      </section>
+      {feedback ? (
+        <section className={feedback.correct ? 'mj-practice-result-compact mj-practice-result-compact--success' : 'mj-practice-result-compact mj-practice-result-compact--danger'}>
+          <h2>{feedback.correct ? '本题连对 +1' : '本题需要复盘'}</h2>
+          <div className="mj-result-tile-row">
+            {answerTiles.map((tile) => (
+              <MahjongTile key={tile} code={tile} size="lg" />
+            ))}
+          </div>
+          <p>{feedback.breakdown.join(' · ')}</p>
+          <ActionButton fullWidth icon={<Sparkles aria-hidden="true" />} onClick={() => nextPracticeSeed(setSeed, () => {
+            setSelectedRanks([]);
+            setFeedback(null);
+          })}>
+            下一题
+          </ActionButton>
+        </section>
+      ) : (
+        <ActionButton disabled={selectedRanks.length === 0} fullWidth icon={<Check aria-hidden="true" />} onClick={submit}>
+          提交答案
+        </ActionButton>
+      )}
     </div>
   );
 }
 
 export function FuPracticePage() {
-  const rows = [
-    { id: 'base', item: '副底', fu: '20' },
-    { id: 'menzen', item: '门清荣和', fu: '10' },
-    { id: 'pair', item: '雀头：役牌中', fu: '2' },
-    { id: 'wait', item: '边张听牌', fu: '2' },
-    { id: 'round', item: '向上取整', fu: '40' },
-  ];
+  const [seed, setSeed] = useState(0);
+  const [answerFu, setAnswerFu] = useState<number | null>(null);
+  const [feedback, setFeedback] = useState<PracticeFeedback<number> | null>(null);
+  const [streak, setStreak] = useState(0);
+  const question = useMemo(() => generateFuPracticeQuestion(seed), [seed]);
+  const rows = (feedback?.breakdown ?? question.breakdown).map((line, index) => ({
+    id: `${index}-${line}`,
+    item: line,
+    fu: index === (feedback?.breakdown.length ?? question.breakdown.length) - 1 ? `${question.answerFu}` : '',
+  }));
+
+  const submit = (fu: number) => {
+    const result = checkFuPracticeAnswer(question, fu);
+    setAnswerFu(fu);
+    setFeedback(result);
+    setStreak((value) => (result.correct ? value + 1 : 0));
+  };
 
   return (
     <div className="mj-page-stack mj-practice-design mj-fu-practice-page">
       <PracticeStats
         items={[
-          { label: '题号', value: '第12题' },
-          { label: '状态', value: '连对 5', tone: 'green' },
-          { label: '场况', value: '东场南家' },
+          { label: '题号', value: `第${seed + 1}题` },
+          { label: '状态', value: `连对 ${streak}`, tone: streak > 0 ? 'green' : 'default' },
+          { label: '场况', value: `${WIND_LABELS[question.roundWind]}场${WIND_LABELS[question.seatWind]}家` },
         ]}
       />
 
       <SectionCard className="mj-practice-hand-card" title="题面手牌">
-        <TileStrip highlightLast tileSize="sm" tiles={fuQuestionHand} />
+        <TileStrip highlightLast tileSize="sm" tiles={question.handTiles.map((tile) => tile.code)} />
         <div className="mj-practice-hand-meta">
-          <Chip selected>荣和</Chip>
-          <Chip selected>场风东</Chip>
-          <Chip selected>自风南</Chip>
-          <Chip selected>边张听牌</Chip>
+          <Chip selected>{formatWinMethod(question.winMethod)}</Chip>
+          <Chip selected>场风{WIND_LABELS[question.roundWind]}</Chip>
+          <Chip selected>自风{WIND_LABELS[question.seatWind]}</Chip>
         </div>
       </SectionCard>
 
       <SectionCard title="选择最终符数">
         <div className="mj-fu-answer-grid">
-          {[
-            { label: '20符' },
-            { label: '25符' },
-            { label: '30符', tone: 'wrong' },
-            { label: '40符', tone: 'correct' },
-            { label: '50符' },
-            { label: '60符' },
-          ].map((option) => (
-            <button
-              key={option.label}
-              aria-pressed={Boolean(option.tone)}
-              className={[
-                'mj-fu-choice',
-                option.tone === 'wrong' && 'mj-fu-choice--wrong',
-                option.tone === 'correct' && 'mj-fu-choice--correct',
-              ]
-                .filter(Boolean)
-                .join(' ')}
-              type="button"
-            >
-              {option.tone === 'wrong' ? <X aria-hidden="true" /> : null}
-              {option.tone === 'correct' ? <Check aria-hidden="true" /> : null}
-              {option.label}
-            </button>
-          ))}
+          {FU_PRACTICE_OPTIONS.map((fu) => {
+            const isSelected = answerFu === fu;
+            const isCorrect = Boolean(feedback && fu === feedback.correctAnswer);
+            const isWrong = Boolean(feedback && isSelected && !isCorrect);
+            return (
+              <button
+                key={fu}
+                aria-pressed={isSelected}
+                className={[
+                  'mj-fu-choice',
+                  isWrong && 'mj-fu-choice--wrong',
+                  isCorrect && 'mj-fu-choice--correct',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+                type="button"
+                onClick={() => submit(fu)}
+              >
+                {isWrong ? <X aria-hidden="true" /> : null}
+                {isCorrect ? <Check aria-hidden="true" /> : null}
+                {fu}符
+              </button>
+            );
+          })}
         </div>
       </SectionCard>
 
-      <section className="mj-fu-breakdown-panel">
-        <h2>
-          <X aria-hidden="true" />
-          回答错误 · 标准答案 40 符
-        </h2>
-        <DataTable
-          columns={[
-            { id: 'item', header: '项目' },
-            { id: 'fu', header: '符', align: 'center' },
-          ]}
-          rows={rows}
-          rowKey={(row) => String(row.id)}
-        />
-        <ActionButton fullWidth icon={<BookOpen aria-hidden="true" />} variant="ghost">
-          查看符数帮助
-        </ActionButton>
-      </section>
+      {feedback ? (
+        <section className="mj-fu-breakdown-panel">
+          <h2>
+            {feedback.correct ? <Check aria-hidden="true" /> : <X aria-hidden="true" />}
+            {feedback.correct ? '回答正确' : `回答错误 · 标准答案 ${feedback.correctAnswer} 符`}
+          </h2>
+          <DataTable
+            columns={[
+              { id: 'item', header: '拆解' },
+              { id: 'fu', header: '答案', align: 'center' },
+            ]}
+            rows={rows}
+            rowKey={(row) => String(row.id)}
+          />
+          <div className="mj-button-row mj-button-row--two">
+            <ActionButton icon={<BookOpen aria-hidden="true" />} variant="ghost" onClick={() => {
+              window.location.hash = '#/help-fu';
+            }}>
+              符数帮助
+            </ActionButton>
+            <ActionButton icon={<Sparkles aria-hidden="true" />} onClick={() => nextPracticeSeed(setSeed, () => {
+              setAnswerFu(null);
+              setFeedback(null);
+            })}>
+              下一题
+            </ActionButton>
+          </div>
+        </section>
+      ) : null}
     </div>
   );
 }
 
+function makePointLookupRows(han: number) {
+  const safeHan = Math.max(1, Math.min(5, han || 1)) as 1 | 2 | 3 | 4 | 5;
+  return [30, 40, 50].map((fu) => {
+    const row = buildHanFuTableRow(safeHan, fu as FuValue);
+    return {
+      id: `${safeHan}-${fu}`,
+      label: `${safeHan}番${fu}符`,
+      ron: String(row.nonDealer.ron),
+      tsumo: `${row.nonDealer.tsumoNonDealerPays}/${row.nonDealer.tsumoDealerPays}`,
+    };
+  });
+}
+
 export function PointPracticePage() {
-  const rows = [
-    { id: '3-30', label: '3番30符', ron: '3900', tsumo: '1000/2000' },
-    { id: '3-40', label: '3番40符', ron: '5200', tsumo: '1300/2600' },
-    { id: '4-30', label: '4番30符', ron: '7700', tsumo: '2000/3900' },
-  ];
+  const [seed, setSeed] = useState(0);
+  const [draft, setDraft] = useState('');
+  const [feedback, setFeedback] = useState<PracticeFeedback<number> | null>(null);
+  const [streak, setStreak] = useState(0);
+  const [showLookup, setShowLookup] = useState(true);
+  const question = useMemo(() => generatePointPracticeQuestion(seed), [seed]);
+  const rows = useMemo(() => makePointLookupRows(question.noYaku ? 1 : question.han), [question.han, question.noYaku]);
+
+  const submit = () => {
+    const result = checkPointPracticeAnswer(question, Number(draft || 0));
+    setFeedback(result);
+    setStreak((value) => (result.correct ? value + 1 : 0));
+  };
 
   return (
     <div className="mj-page-stack mj-practice-design mj-point-practice-page">
+      <PracticeStats
+        items={[
+          { label: '题号', value: `第${seed + 1}题` },
+          { label: '状态', value: `连对 ${streak}`, tone: streak > 0 ? 'green' : 'default' },
+          { label: '答案口径', value: '总获得点' },
+        ]}
+      />
+
       <SectionCard title="题目" description="根据番符、亲闲与和牌方式填写总获得点数。">
         <div className="mj-practice-hand-meta">
-          <Chip selected>3番40符</Chip>
-          <Chip selected>闲家</Chip>
-          <Chip selected>荣和</Chip>
-          <Chip selected>役：立直+三色</Chip>
+          {question.noYaku ? <Chip selected tone="danger">无役</Chip> : <Chip selected>{question.han}番{question.fu}符</Chip>}
+          <Chip selected>{question.seatWind === 'east' ? '亲家' : '闲家'}</Chip>
+          <Chip selected>{formatWinMethod(question.winMethod)}</Chip>
+          <Chip selected>{WIND_LABELS[question.roundWind]}场{WIND_LABELS[question.seatWind]}家</Chip>
         </div>
       </SectionCard>
 
       <SectionCard title="输入总获得点数">
-        <div className="mj-point-digit-grid" aria-label="输入总获得点数">
-          {['7', '7', '0', '0'].map((digit, index) => (
-            <span key={`${digit}-${index}`} className="mj-point-digit-box">
-              {digit}
-            </span>
-          ))}
-        </div>
+        <input
+          className="mj-point-answer-input"
+          inputMode="numeric"
+          pattern="[0-9]*"
+          placeholder="例如 7700"
+          value={draft}
+          onChange={(event) => {
+            setFeedback(null);
+            setDraft(event.target.value.replace(/\D/g, ''));
+          }}
+        />
+        <ActionButton disabled={!draft} fullWidth icon={<Check aria-hidden="true" />} onClick={submit}>
+          提交答案
+        </ActionButton>
       </SectionCard>
 
-      <Alert icon={<AlertCircle aria-hidden="true" />} tone="danger" title="无役题答案">
-        若题目没有役，正确答案为 0。
-      </Alert>
+      {question.noYaku ? (
+        <Alert icon={<AlertCircle aria-hidden="true" />} tone="danger" title="无役题答案">
+          若题目没有役，正确答案为 0。
+        </Alert>
+      ) : null}
 
       <SectionCard className="mj-practice-lookup-card" title="番符点数表">
         <div className="mj-practice-lookup-toggle">
-          <ActionButton icon={<Eye aria-hidden="true" />} size="sm" variant="ghost">
-            显示 / 隐藏查询表
+          <ActionButton icon={<Eye aria-hidden="true" />} size="sm" variant="ghost" onClick={() => setShowLookup((value) => !value)}>
+            {showLookup ? '隐藏查询表' : '显示查询表'}
           </ActionButton>
         </div>
-        <DataTable
-          columns={[
-            { id: 'label', header: '番符' },
-            { id: 'ron', header: '荣和' },
-            { id: 'tsumo', header: '自摸' },
-          ]}
-          rows={rows}
-          rowKey={(row) => String(row.id)}
-        />
+        {showLookup ? (
+          <DataTable
+            columns={[
+              { id: 'label', header: '番符' },
+              { id: 'ron', header: '闲荣' },
+              { id: 'tsumo', header: '闲摸' },
+            ]}
+            rows={rows}
+            rowKey={(row) => String(row.id)}
+          />
+        ) : null}
       </SectionCard>
 
-      <section className="mj-practice-result-compact mj-practice-result-compact--success">
-        <h2>
-          <Check aria-hidden="true" />
-          回答正确：7700 点
-        </h2>
-        <ActionButton fullWidth icon={<BookOpen aria-hidden="true" />}>
-          查看点数帮助
-        </ActionButton>
-      </section>
+      {feedback ? (
+        <PracticeAnswerPanel
+          status={feedback.correct ? 'correct' : 'wrong'}
+          title={feedback.correct ? '回答正确' : '本题需要复盘'}
+          userAnswer={formatPoints(feedback.userAnswer)}
+          correctAnswer={formatPoints(feedback.correctAnswer)}
+          streak={streak}
+          breakdown={<FeedbackBreakdown lines={feedback.breakdown} />}
+          actions={
+            <div className="mj-button-row mj-button-row--two">
+              <ActionButton icon={<BookOpen aria-hidden="true" />} variant="ghost" onClick={() => {
+                window.location.hash = '#/help-points';
+              }}>
+                点数帮助
+              </ActionButton>
+              <ActionButton icon={<Sparkles aria-hidden="true" />} onClick={() => nextPracticeSeed(setSeed, () => {
+                setDraft('');
+                setFeedback(null);
+              })}>
+                下一题
+              </ActionButton>
+            </div>
+          }
+        />
+      ) : null}
     </div>
   );
 }
 
 export function ComebackPracticePage() {
+  const [seed, setSeed] = useState(0);
+  const [answers, setAnswers] = useState<Record<number, FuValue | 'impossible'>>({});
+  const [feedback, setFeedback] = useState<PracticeFeedback<Record<number, FuValue | 'impossible'>> | null>(null);
+  const [streak, setStreak] = useState(0);
+  const question = useMemo(() => generateComebackPracticeQuestion(seed), [seed]);
+  const isComplete = question.hanTiers.every((han) => answers[han] !== undefined);
+
+  const submit = () => {
+    const result = checkComebackPracticeAnswer(question, answers);
+    setFeedback(result);
+    setStreak((value) => (result.correct ? value + 1 : 0));
+  };
+
   return (
     <div className="mj-page-stack mj-practice-design mj-comeback-practice-page">
       <section className="mj-comeback-hero">
         <span>荣和所需点差</span>
-        <strong>5,200</strong>
-        <p>南三局 · 闲家追分 · 不计供托</p>
+        <strong>{question.pointGap.toLocaleString('zh-CN')}</strong>
+        <p>
+          {WIND_LABELS[question.userSeatWind]}家追分 · 对手{WIND_LABELS[question.targetSeatWind]}家 · 不计供托
+        </p>
       </section>
 
       <SectionCard title="判断 1 到 4 番最低需要多少符">
         <div className="mj-comeback-answer-list">
-          {[
-            ['1番', '你的不可', '标准 不可', 'correct'],
-            ['2番', '你的70符', '标准 80符', 'wrong'],
-            ['3番', '你的40符', '标准 40符', 'correct'],
-            ['4番', '你的30符', '标准 30符', 'correct'],
-          ].map(([han, yours, standard, tone]) => (
-            <div key={han} className="mj-comeback-answer-row">
-              <strong>{han}</strong>
-              <span className={tone === 'wrong' ? 'mj-answer-pill mj-answer-pill--wrong' : 'mj-answer-pill'}>
-                {yours}
-              </span>
-              <span className="mj-answer-pill mj-answer-pill--plain">{standard}</span>
-            </div>
-          ))}
+          {question.hanTiers.map((han) => {
+            const selected = answers[han];
+            const standard = feedback?.correctAnswer[han] ?? question.answers[han];
+            const wrong = Boolean(feedback && selected !== standard);
+            return (
+              <div key={han} className="mj-comeback-answer-row mj-comeback-answer-row--interactive">
+                <strong>{han}番</strong>
+                <span className={wrong ? 'mj-answer-pill mj-answer-pill--wrong' : 'mj-answer-pill'}>
+                  你的{formatComebackAnswer(selected)}
+                </span>
+                {feedback ? <span className="mj-answer-pill mj-answer-pill--plain">标准 {formatComebackAnswer(standard)}</span> : null}
+                <div className="mj-chip-row">
+                  {COMEBACK_OPTIONS.map((option) => (
+                    <Chip
+                      key={`${han}-${option}`}
+                      selected={selected === option}
+                      onClick={() => {
+                        setFeedback(null);
+                        setAnswers((value) => ({ ...value, [han]: option }));
+                      }}
+                    >
+                      {formatComebackAnswer(option)}
+                    </Chip>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
         </div>
       </SectionCard>
 
-      <Alert icon={<AlertCircle aria-hidden="true" />} tone="warning" title="连对数">
-        答对 3 / 4，当前连对 7。
-      </Alert>
+      {feedback ? (
+        <Alert icon={<AlertCircle aria-hidden="true" />} tone={feedback.correct ? 'success' : 'warning'} title="判定结果">
+          {feedback.correct ? `全部正确，当前连对 ${streak}` : feedback.breakdown.join('；')}
+        </Alert>
+      ) : null}
 
-      <ActionButton fullWidth icon={<Calculator aria-hidden="true" />}>
+      <div className="mj-button-row mj-button-row--two">
+        <ActionButton disabled={!isComplete} icon={<Check aria-hidden="true" />} onClick={submit}>
+          提交判断
+        </ActionButton>
+        <ActionButton icon={<Sparkles aria-hidden="true" />} variant="secondary" onClick={() => nextPracticeSeed(setSeed, () => {
+          setAnswers({});
+          setFeedback(null);
+        })}>
+          下一题
+        </ActionButton>
+      </div>
+
+      <ActionButton fullWidth icon={<Calculator aria-hidden="true" />} variant="ghost" onClick={() => {
+        window.location.hash = '#/han-fu-calculator';
+      }}>
         跳转番符点数计算
       </ActionButton>
     </div>

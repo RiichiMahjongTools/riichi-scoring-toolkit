@@ -7,10 +7,7 @@ import type { PageProps } from './shared';
 
 const PLACEHOLDER_COPY: Partial<Record<PageId, string>> = {
   'chat-score': '聊天式算分会涉及多轮理解与纠错，当前只保留入口，避免把半成品对话误当成可靠算分。',
-  'legacy-score': '古役范围、地方规则和番值差异较大，当前不接入主算分引擎。',
-  'table-records': '面麻记录需要确认字段、结算规则和导出格式，当前不保存对局数据。',
-  'hand-recognition': '实体手牌识别涉及拍照、模型和隐私边界，当前不上传、不识别图片。',
-  placeholder: '这个模块已经预留入口，具体规则和交互确认后再开放。',
+  placeholder: '当前入口没有绑定到可用页面，请返回首页重新选择。',
 };
 
 export function SafePlaceholderPage({ page, navigate }: PageProps & { page: PageId }) {
@@ -19,7 +16,7 @@ export function SafePlaceholderPage({ page, navigate }: PageProps & { page: Page
   return (
     <div className="mj-page-stack">
       <PlaceholderPanel
-        title={entry?.title ?? '功能建设中'}
+        title={entry?.title ?? '页面不可用'}
         description={PLACEHOLDER_COPY[page] ?? entry?.subtitle ?? PLACEHOLDER_COPY.placeholder}
         actions={
           <>

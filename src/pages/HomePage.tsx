@@ -1,4 +1,4 @@
-import { Copy, Mail, X } from 'lucide-react';
+import { Mail, X } from 'lucide-react';
 import { useState } from 'react';
 
 import { ActionButton, Alert, FeatureCard, SectionCard } from '../components';
@@ -56,7 +56,7 @@ export function HomePage({ navigate }: PageProps) {
               <ActionButton icon={<X aria-hidden="true" />} variant="ghost" onClick={() => setContactOpen(false)}>
                 稍后
               </ActionButton>
-              <ActionButton icon={<Copy aria-hidden="true" />}>复制邮箱</ActionButton>
+              <ActionButton icon={<Mail aria-hidden="true" />} onClick={() => navigate('contact')}>打开反馈页</ActionButton>
             </div>
           </section>
         </div>
