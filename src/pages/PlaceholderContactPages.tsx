@@ -6,7 +6,6 @@ import { entryForPage, type PageId } from './pageModel';
 import type { PageProps } from './shared';
 
 const PLACEHOLDER_COPY: Partial<Record<PageId, string>> = {
-  'chat-score': '聊天式算分会涉及多轮理解与纠错，当前只保留入口，避免把半成品对话误当成可靠算分。',
   placeholder: '当前入口没有绑定到可用页面，请返回首页重新选择。',
 };
 

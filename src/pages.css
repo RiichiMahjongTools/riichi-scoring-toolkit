@@ -884,84 +884,10 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.mj-button-row--three {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.mj-button-row--three .mj-action-button {
-  gap: 5px;
-  padding: 0 8px;
-  font-size: 12px;
-}
-
-.mj-chat-design {
-  gap: 14px;
-}
-
-.mj-chat-flow-card {
-  display: grid;
-  gap: 16px;
-}
-
-.mj-chat-design .mj-step-row {
-  gap: 8px;
-}
-
-.mj-chat-design .mj-step-badge {
-  min-height: 44px;
-  border-radius: 10px;
-  font-size: 13px;
-}
-
-.mj-chat-design .mj-chat-stack {
-  gap: 12px;
-}
-
-.mj-chat-design .mj-chat-bubble {
-  max-width: 86%;
-  padding: 12px 14px;
-  border-radius: var(--mj-radius);
-  font-size: 14px;
-  font-weight: 800;
-}
-
-.mj-chat-design .mj-chat-bubble--assistant {
-  max-width: 86%;
-  background: var(--mj-surface);
-}
-
-.mj-chat-design .mj-chat-bubble--user {
-  justify-self: end;
-  width: 86%;
-  border-color: var(--mj-green);
-  background: var(--mj-green);
-}
-
-.mj-chat-bubble--tiles {
-  display: grid;
-  gap: 8px;
-  width: 86%;
-  padding: 9px 12px;
-}
-
-.mj-chat-bubble--tiles .mj-quick-tile-row,
-.mj-chat-bubble--tiles .mj-tile-strip {
-  gap: 3px;
-}
-
 .mj-action-button--soft-danger {
   color: var(--mj-red);
   border-color: color-mix(in srgb, var(--mj-red) 18%, var(--mj-line));
   background: var(--mj-red-soft);
-}
-
-.mj-chat-step-card {
-  gap: 12px;
-}
-
-.mj-chat-step-card .mj-tile-strip {
-  justify-content: flex-start;
 }
 
 .mj-summary-card--outlined {
@@ -996,56 +922,6 @@
   border: 1px solid var(--mj-line);
   border-radius: var(--mj-radius-sm);
   background: color-mix(in srgb, var(--mj-soft) 42%, var(--mj-surface));
-}
-
-.mj-step-row {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 6px;
-}
-
-.mj-step-badge {
-  display: inline-grid;
-  place-items: center;
-  min-height: 42px;
-  border: 1px solid var(--mj-line);
-  border-radius: 12px;
-  background: var(--mj-soft);
-  color: var(--mj-muted);
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.mj-step-badge--active {
-  border-color: var(--mj-green);
-  background: var(--mj-green);
-  color: #fff;
-}
-
-.mj-chat-stack {
-  display: grid;
-  gap: 8px;
-}
-
-.mj-chat-bubble {
-  max-width: 86%;
-  padding: 12px;
-  border: 1px solid var(--mj-line);
-  border-radius: 16px;
-  font-size: 13px;
-  line-height: 1.5;
-}
-
-.mj-chat-bubble--assistant {
-  justify-self: start;
-  background: var(--mj-surface);
-}
-
-.mj-chat-bubble--user {
-  justify-self: end;
-  border-color: var(--mj-green);
-  background: var(--mj-green);
-  color: #fff;
 }
 
 .mj-summary-card {

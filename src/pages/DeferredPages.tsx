@@ -1,6 +1,5 @@
 import {
   AlertCircle,
-  ArrowLeft,
   Camera,
   Check,
   Copy,
@@ -10,7 +9,6 @@ import {
   Keyboard,
   LoaderCircle,
   RotateCcw,
-  SkipForward,
   Sparkles,
   Trash2,
   X,
@@ -43,7 +41,6 @@ import type { RecognitionDetection } from '../domain/tileRecognition';
 import type { PageProps } from './shared';
 import { formatPoints } from './shared';
 
-const CHAT_SAMPLE_HAND = ['m2', 'm3', 'm4', 'p3', 'p4', 'p5r', 's6', 's7', 's8', 'z1', 'z1', 'z7'];
 const SEAT_IDS = ['east', 'south', 'west', 'north'] as const;
 type SeatId = (typeof SEAT_IDS)[number];
 type RecordOutcome = 'ron' | 'tsumo' | 'draw' | 'adjust';
@@ -137,57 +134,6 @@ async function copyLocalText(text: string, onDone: (message: string) => void) {
 
   window.prompt('复制文本', text);
   onDone('已打开复制文本');
-}
-
-export function ChatScorePage() {
-  return (
-    <div className="mj-page-stack mj-chat-design">
-      <Alert icon={<AlertCircle aria-hidden="true" />} tone="warning" title="保留入口">
-        聊天式点数计算仍按本轮目标排除，避免把未验证的多轮对话理解误当成可靠算分。
-      </Alert>
-
-      <section className="mj-chat-flow-card">
-        <div className="mj-step-row">
-          {['手牌', '和牌', '宝牌', '确认'].map((step, index) => (
-            <span key={step} className={index < 2 ? 'mj-step-badge mj-step-badge--active' : 'mj-step-badge'}>
-              {index + 1} {step}
-            </span>
-          ))}
-        </div>
-        <div className="mj-chat-stack">
-          <div className="mj-chat-bubble mj-chat-bubble--assistant">
-            先录入手牌。已识别 11 张，还差和牌或自摸牌。
-          </div>
-          <div className="mj-chat-bubble mj-chat-bubble--user mj-chat-bubble--tiles">
-            <strong>二三四万 345筒 678索 东东中</strong>
-            <TileStrip tileSize="xs" tiles={CHAT_SAMPLE_HAND} />
-          </div>
-          <div className="mj-chat-bubble mj-chat-bubble--assistant">
-            请选择和牌方式，并确认场风/自风。
-          </div>
-          <div className="mj-chat-bubble mj-chat-bubble--user">荣和，东场南家。</div>
-        </div>
-      </section>
-
-      <section className="mj-design-card mj-chat-step-card">
-        <header className="mj-design-card__header">
-          <h2>当前步骤：宝牌指示牌</h2>
-        </header>
-        <TileStrip tileSize="sm" tiles={['m1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7', 'm8', 'm9']} />
-        <div className="mj-button-row mj-button-row--three">
-          <ActionButton icon={<ArrowLeft aria-hidden="true" />} variant="ghost">
-            上一步
-          </ActionButton>
-          <ActionButton icon={<SkipForward aria-hidden="true" />} variant="gold">
-            跳过
-          </ActionButton>
-          <ActionButton className="mj-action-button--soft-danger" icon={<Trash2 aria-hidden="true" />} variant="ghost">
-            清空重来
-          </ActionButton>
-        </div>
-      </section>
-    </div>
-  );
 }
 
 export function LegacyScorePage() {

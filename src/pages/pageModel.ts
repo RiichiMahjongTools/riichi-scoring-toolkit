@@ -5,7 +5,6 @@ import {
   House,
   HelpCircle,
   Layers,
-  MessageCircle,
   NotebookTabs,
   ScrollText,
   ScanLine,
@@ -18,7 +17,6 @@ import type { LucideIcon } from 'lucide-react';
 export type PageId =
   | 'home'
   | 'quick-score'
-  | 'chat-score'
   | 'chinitsu'
   | 'han-fu-calculator'
   | 'fu-practice'
@@ -55,14 +53,6 @@ export const NAV_ENTRIES: NavEntry[] = [
     subtitle: '手牌、宝牌、场况与四麻/三麻结算',
     status: 'ready',
     icon: Calculator,
-  },
-  {
-    id: 'chat-score',
-    group: '计分',
-    title: '聊天式点数计算',
-    subtitle: '分步录入方式，当前保留入口',
-    status: 'placeholder',
-    icon: MessageCircle,
   },
   {
     id: 'han-fu-calculator',
@@ -157,7 +147,6 @@ export const NAV_ENTRIES: NavEntry[] = [
 export const PAGE_TITLES: Record<PageId, string> = {
   home: '日麻点数',
   'quick-score': '快速点数计算',
-  'chat-score': '聊天式点数计算',
   chinitsu: '清一色听牌练习',
   'han-fu-calculator': '番符点数计算',
   'fu-practice': '符数计算练习',

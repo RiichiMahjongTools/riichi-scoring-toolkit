@@ -3,7 +3,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { Alert, AppFrame, TopNav } from './components';
 import {
-  ChatScorePage,
   DesignedPlaceholderPage,
   HandRecognitionPage,
   LegacyScorePage,
@@ -162,8 +161,6 @@ function renderPage(page: PageId, navigate: (page: PageId) => void) {
       return <ComebackPracticePage />;
     case 'contact':
       return <ContactPage />;
-    case 'chat-score':
-      return <ChatScorePage />;
     case 'legacy-score':
       return <LegacyScorePage />;
     case 'table-records':
