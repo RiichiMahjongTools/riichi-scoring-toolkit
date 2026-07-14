@@ -157,6 +157,19 @@ export class Renhou extends AlwaysYaku {
   static override han_closed = 5;
 }
 
+export class TsubameGaeshi extends AlwaysYaku {
+  static override yaku_id = 126;
+  static override yakuName = "Tsubame Gaeshi";
+  static override han_closed = 1;
+}
+
+export class Kanfuri extends AlwaysYaku {
+  static override yaku_id = 127;
+  static override yakuName = "Kanfuri";
+  static override han_open = 1;
+  static override han_closed = 1;
+}
+
 export class Pinfu extends AlwaysYaku {
   static override yaku_id = 12;
   static override yakuName = "Pinfu";
@@ -740,6 +753,72 @@ export class Daichisei extends Yaku {
   }
 }
 
+export class Sanrenkou extends Yaku {
+  static override yaku_id = 123;
+  static override yakuName = "Sanrenkou";
+  static override han_open = 2;
+  static override han_closed = 2;
+
+  is_condition_met(hand: Hand): boolean {
+    const triplets = new Set(
+      hand
+        .filter((item) => is_pon_or_kan(item) && item[0] < 27)
+        .map((item) => item[0])
+    );
+
+    for (const suitStart of [0, 9, 18]) {
+      for (let rank = 0; rank <= 6; rank += 1) {
+        if (
+          triplets.has(suitStart + rank) &&
+          triplets.has(suitStart + rank + 1) &&
+          triplets.has(suitStart + rank + 2)
+        ) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+}
+
+export class IsshokuYonshun extends Yaku {
+  static override yaku_id = 124;
+  static override yakuName = "Isshoku Yonshun";
+  static override han_open = 13;
+  static override han_closed = 13;
+  static override is_yakuman = true;
+
+  is_condition_met(hand: Hand): boolean {
+    const chiCounts = new Map<number, number>();
+    for (const item of hand) {
+      if (is_chi(item)) chiCounts.set(item[0], (chiCounts.get(item[0]) ?? 0) + 1);
+    }
+    return [...chiCounts.values()].some((count) => count >= 4);
+  }
+}
+
+export class Shiisanpuutaa extends Yaku {
+  static override yaku_id = 125;
+  static override yakuName = "Shiisanpuutaa";
+  static override han_closed = 1;
+
+  is_condition_met(_hand: Hand | null, tiles_34: ArrayLike<number>): boolean {
+    const counts = Array.from({ length: 34 }, (_, index) => tiles_34[index] ?? 0);
+    if (counts.reduce((total, count) => total + count, 0) !== 14) return false;
+    if (counts.filter((count) => count === 2).length !== 1) return false;
+    if (counts.some((count) => count > 2)) return false;
+
+    for (const suitStart of [0, 9, 18]) {
+      const ranks = Array.from({ length: 9 }, (_, rank) => rank)
+        .filter((rank) => counts[suitStart + rank] > 0);
+      for (let index = 1; index < ranks.length; index += 1) {
+        if (ranks[index] - ranks[index - 1] <= 2) return false;
+      }
+    }
+    return true;
+  }
+}
+
 export class DaiSuushii extends Yaku {
   static override yaku_id = 111;
   static override yakuName = "Dai Suushii";
@@ -923,6 +1002,8 @@ export class YakuConfig {
   daburu_open_riichi = new DaburuOpenRiichi();
   nagashi_mangan = new NagashiMangan();
   renhou = new Renhou();
+  tsubame_gaeshi = new TsubameGaeshi();
+  kanfuri = new Kanfuri();
 
   pinfu = new Pinfu();
   tanyao = new Tanyao();
@@ -968,6 +1049,9 @@ export class YakuConfig {
   chinroto = new Chinroutou();
   daisharin = new Daisharin();
   daichisei = new Daichisei();
+  sanrenkou = new Sanrenkou();
+  isshoku_yonshun = new IsshokuYonshun();
+  shiisanpuutaa = new Shiisanpuutaa();
 
   daisuushi = new DaiSuushii();
   daburu_kokushi = new DaburuKokushiMusou();

@@ -40,6 +40,7 @@ import {
 
 type KeyboardTarget = 'hand' | 'dora' | 'ura' | 'meld';
 type QuickComputation = ScoreComputation | { kind: 'empty' };
+type ScorePageVariant = 'quick' | 'legacy';
 
 const MELD_KIND_OPTIONS: Array<{ value: MeldKind; label: string; tiles: number }> = [
   { value: 'chi', label: '吃', tiles: 3 },
@@ -78,6 +79,12 @@ const EXTRA_OPTIONS: Array<{ key: keyof ScoreConditions; label: string }> = [
   { key: 'chankan', label: '抢杠' },
   { key: 'tenhou', label: '天和' },
   { key: 'chiihou', label: '地和' },
+];
+
+const LEGACY_EVENT_OPTIONS: Array<{ key: keyof ScoreConditions; label: string; note: string }> = [
+  { key: 'renhou', label: '人和', note: '子家第一次摸牌前荣和，按 5 番' },
+  { key: 'tsubameGaeshi', label: '燕返', note: '门前荣和他家的立直宣言牌，按 1 番' },
+  { key: 'kanfuri', label: '杠振', note: '荣和他家杠后摸岭上牌再打出的牌，按 1 番' },
 ];
 
 function toTileCodes(values: string[]): TileCode[] {
@@ -151,6 +158,15 @@ async function copyResult(text: string, onDone: (message: string) => void) {
 }
 
 export function QuickScorePage() {
+  return <ScoreCalculatorPage variant="quick" />;
+}
+
+export function LegacyScorePage() {
+  return <ScoreCalculatorPage variant="legacy" />;
+}
+
+function ScoreCalculatorPage({ variant }: { variant: ScorePageVariant }) {
+  const isLegacy = variant === 'legacy';
   const initialImportedTiles = parseQuickScoreTileImport(window.location.hash);
   const [mode, setMode] = useState<ScoreMode>('yonma');
   const [handTiles, setHandTiles] = useState<TileCode[]>(initialImportedTiles);
@@ -193,20 +209,23 @@ export function QuickScorePage() {
 
     try {
       const parsedHandTiles = parseTileCodes(handTiles);
-      return calculateScoreOrEfficiency({
-        mode,
-        handTiles: parsedHandTiles,
-        winTile: selectedHandWinTileIndex === null ? null : parsedHandTiles[selectedHandWinTileIndex],
-        melds,
-        doraIndicators: parseTileCodes(doraIndicators),
-        uraDoraIndicators: parseTileCodes(uraDoraIndicators),
-        northDoraCount,
-        roundWind,
-        seatWind,
-        honba,
-        doubleWindPairTwoFu,
-        conditions,
-      });
+      return calculateScoreOrEfficiency(
+        {
+          mode,
+          handTiles: parsedHandTiles,
+          winTile: selectedHandWinTileIndex === null ? null : parsedHandTiles[selectedHandWinTileIndex],
+          melds,
+          doraIndicators: parseTileCodes(doraIndicators),
+          uraDoraIndicators: parseTileCodes(uraDoraIndicators),
+          northDoraCount,
+          roundWind,
+          seatWind,
+          honba,
+          doubleWindPairTwoFu,
+          conditions,
+        },
+        { enableLegacyYaku: isLegacy },
+      );
     } catch (error) {
       return {
         kind: 'invalid',
@@ -227,6 +246,7 @@ export function QuickScorePage() {
     selectedHandWinTileIndex,
     seatWind,
     uraDoraIndicators,
+    isLegacy,
   ]);
 
   const keyboardTiles =
@@ -299,7 +319,7 @@ export function QuickScorePage() {
   };
 
   const openHandRecognition = () => {
-    window.location.hash = '#/hand-recognition';
+    window.location.hash = `#/hand-recognition?return=${isLegacy ? 'legacy-score' : 'quick-score'}`;
     window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'smooth' }));
   };
 
@@ -308,7 +328,7 @@ export function QuickScorePage() {
   const invalidErrors = computation.kind === 'invalid' ? computation.errors : [];
 
   return (
-    <div className="mj-page-stack mj-quick-page">
+    <div className={isLegacy ? 'mj-page-stack mj-quick-page mj-legacy-page' : 'mj-page-stack mj-quick-page'}>
       <QuickScorePanel computation={computation} seatWind={seatWind} />
 
       <section className="mj-design-card mj-quick-hand-card">
@@ -492,6 +512,16 @@ export function QuickScorePage() {
               </Chip>
             ))}
             <Chip onClick={() => setCopyMessage('流局满贯需要特殊规则确认，当前不会写入结果')}>流局满贯</Chip>
+            {isLegacy ? LEGACY_EVENT_OPTIONS.map((option) => (
+              <Chip
+                key={option.key}
+                selected={conditions[option.key]}
+                title={option.note}
+                onClick={() => toggleCondition(option.key)}
+              >
+                {option.label}
+              </Chip>
+            )) : null}
           </div>
           <div aria-label="常用役" className="mj-quick-common-actions">
             {COMMON_EXTRA_OPTIONS.map((option) => (
@@ -628,6 +658,7 @@ function Pill({
 }) {
   return (
     <button
+      aria-pressed={selected}
       className={selected ? 'mj-rule-pill mj-rule-pill--selected' : 'mj-rule-pill'}
       disabled={disabled}
       type="button"
@@ -654,6 +685,8 @@ function QuickScorePanel({ computation, seatWind }: { computation: QuickComputat
     const value = formatPoints(result.cost?.total).replace(' 点', '');
     const method = result.is_tsumo ? '自摸' : '荣和';
     const seat = WIND_LABELS[seatWind] === '东' ? '庄家' : '闲家';
+    const mainPayment = result.cost ? result.cost.main + result.cost.main_bonus : undefined;
+    const additionalPayment = result.cost ? result.cost.additional + result.cost.additional_bonus : undefined;
 
     return (
       <section className="mj-score-hero mj-score-hero--quick">
@@ -661,10 +694,10 @@ function QuickScorePanel({ computation, seatWind }: { computation: QuickComputat
         <strong>{value}</strong>
         <small>{seat}{method} · {formatHan(result.han)}{formatFu(result.fu)} · {formatLimit(result)}</small>
         <div className="mj-score-badges">
-          {!result.is_tsumo ? <b>放铳 {formatPoints(result.cost?.main).replace(' 点', '')}</b> : null}
-          {result.is_tsumo && result.is_dealer ? <b>每家 {formatPoints(result.cost?.main).replace(' 点', '')}</b> : null}
-          {result.is_tsumo && !result.is_dealer ? <b>庄家 {formatPoints(result.cost?.main).replace(' 点', '')}</b> : null}
-          {result.is_tsumo && !result.is_dealer ? <b>子家 {formatPoints(result.cost?.additional).replace(' 点', '')}</b> : null}
+          {!result.is_tsumo ? <b>放铳 {formatPoints(mainPayment).replace(' 点', '')}</b> : null}
+          {result.is_tsumo && result.is_dealer ? <b>每家 {formatPoints(mainPayment).replace(' 点', '')}</b> : null}
+          {result.is_tsumo && !result.is_dealer ? <b>庄家 {formatPoints(mainPayment).replace(' 点', '')}</b> : null}
+          {result.is_tsumo && !result.is_dealer ? <b>子家 {formatPoints(additionalPayment).replace(' 点', '')}</b> : null}
         </div>
       </section>
     );

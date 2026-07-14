@@ -21,7 +21,6 @@ import {
   Chip,
   DataTable,
   MahjongTile,
-  PaymentCards,
   SectionCard,
   SegmentedControl,
   TileKeyboard,
@@ -37,6 +36,7 @@ import {
   type TileCode,
   type WinMethod,
 } from '../domain';
+import { recognitionTilesToHash, type RecognitionScoreTarget } from '../domain/recognitionRouting';
 import type { RecognitionDetection } from '../domain/tileRecognition';
 import type { PageProps } from './shared';
 import { formatPoints } from './shared';
@@ -79,15 +79,6 @@ const INITIAL_PLAYERS: PlayerState[] = [
   { id: 'north', wind: '北', name: '北家', score: 25000 },
 ];
 
-const LEGACY_YAKU = [
-  { id: 'daisharin', name: '大车轮', han: 13, note: '常见古役满，按单倍役满估算' },
-  { id: 'daichikurin', name: '大竹林', han: 13, note: '索子版大车轮，按单倍役满估算' },
-  { id: 'daisuurin', name: '大数邻', han: 13, note: '万子版大车轮，按单倍役满估算' },
-  { id: 'sanrenkou', name: '三连刻', han: 2, note: '地方役，默认 2 番' },
-  { id: 'isshoku-yonsun', name: '一色四顺', han: 13, note: '地方役满估算' },
-  { id: 'shiisanpuutaa', name: '十三不塔', han: 1, note: '地方役，默认 1 番' },
-];
-
 function toTileCodes(values: string[]): TileCode[] {
   return values.filter(isTileCode);
 }
@@ -98,8 +89,11 @@ function hasFourPhysicalCopies(tile: string, currentTiles: string[]) {
   return currentTiles.filter((value) => isTileCode(value) && baseTileCode(value) === base).length >= 4;
 }
 
-function recognitionTilesToHash(tiles: readonly TileCode[]) {
-  return `#/quick-score?${new URLSearchParams({ tiles: tiles.join(',') }).toString()}`;
+function recognitionScoreTarget(hash: string): RecognitionScoreTarget {
+  const queryIndex = hash.indexOf('?');
+  if (queryIndex === -1) return 'quick-score';
+  const params = new URLSearchParams(hash.slice(queryIndex + 1));
+  return params.get('return') === 'legacy-score' ? 'legacy-score' : 'quick-score';
 }
 
 function formatPaymentSummary(params: {
@@ -134,132 +128,6 @@ async function copyLocalText(text: string, onDone: (message: string) => void) {
 
   window.prompt('复制文本', text);
   onDone('已打开复制文本');
-}
-
-export function LegacyScorePage() {
-  const [selectedYaku, setSelectedYaku] = useState<string[]>(['sanrenkou']);
-  const [customName, setCustomName] = useState('');
-  const [customHan, setCustomHan] = useState(0);
-  const [isDealer, setIsDealer] = useState(false);
-  const [winMethod, setWinMethod] = useState<WinMethod>('ron');
-  const [honba, setHonba] = useState(0);
-  const totalHan = selectedYaku.reduce((sum, id) => sum + (LEGACY_YAKU.find((yaku) => yaku.id === id)?.han ?? 0), 0) + (customName.trim() ? customHan : 0);
-  const legalFu = getLegalFuOptions(Math.max(1, Math.min(13, totalHan || 1)));
-  const [fu, setFu] = useState<FuValue>(40);
-  const safeFu = legalFu.includes(fu) ? fu : legalFu[0] ?? 30;
-  const canCalculate = totalHan > 0;
-  const result = canCalculate
-    ? calculateScoreCost({ han: totalHan, fu: safeFu, is_dealer: isDealer, is_tsumo: winMethod === 'tsumo', tsumi_number: honba })
-    : null;
-
-  const toggleYaku = (id: string) => {
-    setSelectedYaku((value) => (value.includes(id) ? value.filter((item) => item !== id) : [...value, id]));
-  };
-
-  return (
-    <div className="mj-page-stack mj-legacy-page">
-      <SectionCard title="地方役 / 古役">
-        <div className="mj-chip-row">
-          {LEGACY_YAKU.map((yaku) => (
-            <Chip key={yaku.id} selected={selectedYaku.includes(yaku.id)} tone={yaku.han >= 13 ? 'danger' : 'warning'} onClick={() => toggleYaku(yaku.id)}>
-              {yaku.name}
-            </Chip>
-          ))}
-        </div>
-        <DataTable
-          columns={[
-            { id: 'name', header: '役' },
-            { id: 'han', header: '番值', align: 'center' },
-            { id: 'note', header: '口径' },
-          ]}
-          rows={LEGACY_YAKU.filter((yaku) => selectedYaku.includes(yaku.id)).map((yaku) => ({
-            id: yaku.id,
-            name: yaku.name,
-            han: yaku.han >= 13 ? '役满' : `${yaku.han}番`,
-            note: yaku.note,
-          }))}
-          rowKey={(row) => String(row.id)}
-        />
-      </SectionCard>
-
-      <SectionCard title="自定义古役">
-        <div className="mj-inline-form-grid">
-          <label>
-            <span>古役名</span>
-            <input value={customName} placeholder="例如 一色三顺" onChange={(event) => setCustomName(event.target.value)} />
-          </label>
-          <label>
-            <span>番值</span>
-            <input
-              inputMode="numeric"
-              max={26}
-              min={0}
-              type="number"
-              value={customHan}
-              onChange={(event) => setCustomHan(Math.max(0, Math.min(26, Number(event.target.value) || 0)))}
-            />
-          </label>
-        </div>
-      </SectionCard>
-
-      <SectionCard title="估算条件">
-        <div className="mj-info-row">
-          <span>亲闲</span>
-          <span className="mj-info-row__chips">
-            <Chip selected={!isDealer} onClick={() => setIsDealer(false)}>闲家</Chip>
-            <Chip selected={isDealer} onClick={() => setIsDealer(true)}>亲家</Chip>
-          </span>
-        </div>
-        <div className="mj-info-row">
-          <span>和牌</span>
-          <span className="mj-info-row__chips">
-            <Chip selected={winMethod === 'ron'} onClick={() => setWinMethod('ron')}>荣和</Chip>
-            <Chip selected={winMethod === 'tsumo'} onClick={() => setWinMethod('tsumo')}>自摸</Chip>
-          </span>
-        </div>
-        <div className="mj-info-row">
-          <span>符数</span>
-          <span className="mj-info-row__chips">
-            {legalFu.slice(0, 6).map((option) => (
-              <Chip key={option} selected={safeFu === option} onClick={() => setFu(option)}>{option}符</Chip>
-            ))}
-          </span>
-        </div>
-        <div className="mj-info-row">
-          <span>本场</span>
-          <span className="mj-info-row__chips">
-            {[0, 1, 2, 3].map((value) => (
-              <Chip key={value} selected={honba === value} onClick={() => setHonba(value)}>{value}本场</Chip>
-            ))}
-          </span>
-        </div>
-      </SectionCard>
-
-      <div className="mj-score-hero">
-        <span>估算点数</span>
-        <strong>{result ? result.cost.total.toLocaleString('zh-CN') : '-'}</strong>
-        <small>{canCalculate ? `${totalHan >= 13 ? result?.yaku_level_label ?? '役满' : `${totalHan}番${safeFu}符`} · ${isDealer ? '亲家' : '闲家'}${winMethod === 'ron' ? '荣和' : '自摸'}` : '请选择至少一个古役'}</small>
-      </div>
-
-      {result ? (
-        <PaymentCards
-          items={[
-            {
-              id: 'payment',
-              label: winMethod === 'ron' ? '荣和支付' : '自摸支付',
-              value: formatPaymentSummary({ han: totalHan, fu: safeFu, isDealer, winMethod, honba }),
-              caption: result.yaku_level_label ?? '普通手',
-              tone: 'success',
-            },
-          ]}
-        />
-      ) : null}
-
-      <Alert icon={<AlertCircle aria-hidden="true" />} tone="warning" title="规则口径">
-        古役和地方役没有统一标准，本页只按手动选择的番值进入点数公式，不自动判定牌型。
-      </Alert>
-    </div>
-  );
 }
 
 function roundLabel(roundIndex: number) {
@@ -536,6 +404,7 @@ function imageFileFromClipboard(event: ClipboardEvent) {
 }
 
 export function HandRecognitionPage() {
+  const scoreTarget = recognitionScoreTarget(window.location.hash);
   const [imageDataUrl, setImageDataUrl] = useState('');
   const [tiles, setTiles] = useState<TileCode[]>([]);
   const [recognitionCandidates, setRecognitionCandidates] = useState<RecognitionDetection['candidates'][]>([]);
@@ -622,8 +491,8 @@ export function HandRecognitionPage() {
     setSelectedRecognitionIndex(null);
   };
 
-  const importToQuickScore = () => {
-    window.location.hash = recognitionTilesToHash(tiles);
+  const importToScore = () => {
+    window.location.hash = recognitionTilesToHash(tiles, scoreTarget);
     window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'smooth' }));
   };
 
@@ -663,7 +532,7 @@ export function HandRecognitionPage() {
       </div>
 
       <SectionCard className="mj-recognition-preview-card">
-        <div className={imageDataUrl ? 'mj-scan-preview mj-scan-preview--image' : 'mj-scan-preview'}>
+        <div className={imageDataUrl ? 'mj-scan-preview mj-scan-preview--image' : 'mj-scan-preview mj-scan-preview--empty'}>
           {imageDataUrl ? (
             <div className="mj-recognition-image-wrap">
               <img alt="待确认的手牌照片" src={imageDataUrl} />
@@ -741,8 +610,8 @@ export function HandRecognitionPage() {
         <ActionButton fullWidth icon={<Keyboard aria-hidden="true" />} onClick={() => setKeyboardOpen(true)}>
           打开牌键盘修正
         </ActionButton>
-        <ActionButton disabled={tiles.length === 0} fullWidth icon={<Sparkles aria-hidden="true" />} onClick={importToQuickScore}>
-          带入快速算分
+        <ActionButton disabled={tiles.length === 0} fullWidth icon={<Sparkles aria-hidden="true" />} onClick={importToScore}>
+          {scoreTarget === 'legacy-score' ? '带入古役算分' : '带入快速算分'}
         </ActionButton>
       </SectionCard>
 
@@ -754,11 +623,7 @@ export function HandRecognitionPage() {
             </Alert>
           ))}
         </div>
-      ) : (
-        <Alert icon={<AlertCircle aria-hidden="true" />} tone="info" title="本地处理">
-          本页不会上传照片；牌序以你确认后的输入为准，同一物理牌最多 4 枚。
-        </Alert>
-      )}
+      ) : null}
 
       <ActionButton disabled={tiles.length === 0} fullWidth icon={<Copy aria-hidden="true" />} onClick={copyTiles}>
         复制最终牌序

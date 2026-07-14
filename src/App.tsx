@@ -5,7 +5,6 @@ import { Alert, AppFrame, TopNav } from './components';
 import {
   DesignedPlaceholderPage,
   HandRecognitionPage,
-  LegacyScorePage,
   TableRecordsPage,
   TileKeyboardDemoPage,
 } from './pages/DeferredPages';
@@ -18,7 +17,7 @@ import {
   FuPracticePage,
   PointPracticePage,
 } from './pages/PracticePages';
-import { QuickScorePage } from './pages/QuickScorePage';
+import { LegacyScorePage, QuickScorePage } from './pages/QuickScorePage';
 import { FuHelpPage, PointHelpPage, YakuDetailPage, YakuListPage } from './pages/YakuHelpPages';
 import { PAGE_TITLES, entryForPage, type PageId } from './pages/pageModel';
 import './pages.css';

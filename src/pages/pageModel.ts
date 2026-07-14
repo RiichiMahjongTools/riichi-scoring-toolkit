@@ -104,9 +104,9 @@ export const NAV_ENTRIES: NavEntry[] = [
   },
   {
     id: 'legacy-score',
-    group: '资料',
-    title: '古役计算',
-    subtitle: '手动选择地方役番值并按番符公式估算',
+    group: '计分',
+    title: '古役点数计算',
+    subtitle: '录入或识别手牌，自动判定牌型古役',
     status: 'ready',
     icon: ScrollText,
   },

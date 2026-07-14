@@ -25,6 +25,9 @@ export interface ScoreConditions {
   chankan: boolean;
   tenhou: boolean;
   chiihou: boolean;
+  renhou: boolean;
+  tsubameGaeshi: boolean;
+  kanfuri: boolean;
 }
 
 export interface ScoreInput {
@@ -58,6 +61,9 @@ export const DEFAULT_SCORE_CONDITIONS: ScoreConditions = {
   chankan: false,
   tenhou: false,
   chiihou: false,
+  renhou: false,
+  tsubameGaeshi: false,
+  kanfuri: false,
 };
 
 const MELD_KIND_TO_MAHJONG_TYPE: Record<MeldKind, string> = {
@@ -216,6 +222,14 @@ export function validateScoreInput(input: ScoreInput): ValidationResult {
   if (input.conditions.tenhou && input.seatWind !== 'east') warnings.push('天和通常只适用于庄家');
   if (input.conditions.chiihou && input.seatWind === 'east') warnings.push('地和通常只适用于子家');
   if (input.conditions.chankan && input.conditions.tsumo) errors.push('抢杠属于荣和条件，不能与自摸同时选择');
+  if (input.conditions.renhou && input.seatWind === 'east') errors.push('人和只适用于子家');
+  if (input.conditions.renhou && input.conditions.tsumo) errors.push('人和属于荣和条件，不能与自摸同时选择');
+  if (input.conditions.renhou && input.melds.length > 0) errors.push('人和不能有副露');
+  if (input.conditions.tsubameGaeshi && input.conditions.tsumo) errors.push('燕返属于荣和条件，不能与自摸同时选择');
+  if (input.conditions.tsubameGaeshi && input.melds.some((meld) => meld.opened)) {
+    errors.push('燕返是门前限定役，不能有明副露');
+  }
+  if (input.conditions.kanfuri && input.conditions.tsumo) errors.push('杠振属于荣和条件，不能与自摸同时选择');
 
   return { ok: errors.length === 0, errors, warnings };
 }

@@ -26,6 +26,10 @@ export interface YakuResultItem {
   source: 'hand' | 'condition' | 'dora';
 }
 
+export interface ScoreCalculationOptions {
+  enableLegacyYaku?: boolean;
+}
+
 export interface FuBreakdownItem {
   reason: string;
   name: string;
@@ -121,9 +125,14 @@ const YAKU_NAME_ZH: Record<number, string> = {
   120: '宝牌',
   121: '赤宝牌',
   122: '里宝牌',
+  123: '三连刻',
+  124: '一色四顺',
+  125: '十三不塔',
+  126: '燕返',
+  127: '杠振',
 };
 
-const CONDITION_YAKU_IDS = new Set([0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 115, 116, 117]);
+const CONDITION_YAKU_IDS = new Set([0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 115, 116, 117, 126, 127]);
 const DORA_YAKU_IDS = new Set([120, 121, 122]);
 
 const FU_REASON_ZH: Record<string, string> = {
@@ -164,6 +173,12 @@ const ERROR_MESSAGES: Record<string, string> = {
   [HandCalculator.ERR_CHIIHOU_AS_DEALER]: '地和只适用于子家',
   [HandCalculator.ERR_CHIIHOU_WITHOUT_TSUMO]: '地和必须按自摸计算',
   [HandCalculator.ERR_CHIIHOU_WITH_MELD]: '地和不能有副露',
+  [HandCalculator.ERR_RENHOU_AS_DEALER]: '人和只适用于子家',
+  [HandCalculator.ERR_RENHOU_WITH_TSUMO]: '人和必须按荣和计算',
+  [HandCalculator.ERR_RENHOU_WITH_MELD]: '人和不能有副露',
+  [HandCalculator.ERR_TSUBAME_GAESHI_WITH_TSUMO]: '燕返必须按荣和计算',
+  [HandCalculator.ERR_TSUBAME_GAESHI_WITH_OPEN_HAND]: '燕返是门前限定役，不能有明副露',
+  [HandCalculator.ERR_KANFURI_WITH_TSUMO]: '杠振必须按荣和计算',
 };
 
 function getWinMethod(input: ScoreInput): WinMethod {
@@ -190,10 +205,18 @@ function yakuSource(yaku: Yaku): YakuResultItem['source'] {
   return 'hand';
 }
 
+function yakuNameZh(yaku: Yaku): string {
+  if (yaku.yaku_id === 109) {
+    if (yaku.name === 'Daisuurin') return '大数邻';
+    if (yaku.name === 'Daichikurin') return '大竹林';
+  }
+  return YAKU_NAME_ZH[yaku.yaku_id] ?? yaku.name;
+}
+
 function mapYaku(yaku: readonly Yaku[] | null, open: boolean): YakuResultItem[] {
   return (yaku ?? []).map((entry) => ({
     id: String(entry.yaku_id),
-    name: YAKU_NAME_ZH[entry.yaku_id] ?? entry.name,
+    name: yakuNameZh(entry),
     han: yakuHan(entry, open),
     source: yakuSource(entry),
   }));
@@ -207,7 +230,7 @@ function mapFuDetails(details: readonly FuDetail[] | null): FuBreakdownItem[] {
   }));
 }
 
-function buildHandConfig(input: ScoreInput): HandConfig {
+function buildHandConfig(input: ScoreInput, enableLegacyYaku: boolean): HandConfig {
   const hasAkaDora = countRedDora([...input.handTiles, ...input.melds.flatMap((meld) => meld.tiles)]) > 0;
   return new HandConfig({
     is_tsumo: input.conditions.tsumo,
@@ -220,6 +243,9 @@ function buildHandConfig(input: ScoreInput): HandConfig {
     is_daburu_riichi: input.conditions.doubleRiichi,
     is_tenhou: input.conditions.tenhou,
     is_chiihou: input.conditions.chiihou,
+    is_renhou: input.conditions.renhou,
+    is_tsubame_gaeshi: input.conditions.tsubameGaeshi,
+    is_kanfuri: input.conditions.kanfuri,
     player_wind: WIND_TO_TILE_34[input.seatWind],
     round_wind: WIND_TO_TILE_34[input.roundWind],
     tsumi_number: input.honba,
@@ -229,6 +255,10 @@ function buildHandConfig(input: ScoreInput): HandConfig {
       has_aka_dora: hasAkaDora,
       is_three_player: input.mode === 'sanma',
       double_wind_pair_fu: input.doubleWindPairTwoFu ? 2 : 4,
+      has_daisharin_other_suits: enableLegacyYaku,
+      has_sanrenkou: enableLegacyYaku,
+      has_isshoku_yonshun: enableLegacyYaku,
+      has_shiisanpuutaa: enableLegacyYaku,
     }),
   });
 }
@@ -247,7 +277,10 @@ function buildNoYakuResult(input: ScoreInput, warnings: readonly string[]): Scor
   };
 }
 
-export function calculateScoreOrEfficiency(input: ScoreInput): ScoreComputation {
+export function calculateScoreOrEfficiency(
+  input: ScoreInput,
+  options: ScoreCalculationOptions = {},
+): ScoreComputation {
   const validation = validateScoreInput(input);
   if (!validation.ok) return { kind: 'invalid', errors: validation.errors, warnings: validation.warnings };
 
@@ -275,7 +308,7 @@ export function calculateScoreOrEfficiency(input: ScoreInput): ScoreComputation 
     input.winTile,
     input.melds,
     input.doraIndicators,
-    buildHandConfig(input),
+    buildHandConfig(input, options.enableLegacyYaku ?? false),
     undefined,
     input.uraDoraIndicators,
   );

@@ -2,7 +2,6 @@ import * as ort from 'onnxruntime-web/wasm';
 import ortWasmUrl from 'onnxruntime-web/ort-wasm-simd-threaded.wasm?url';
 
 import {
-  ALL_TILE_CODES,
   baseTileCode,
   isTileCode,
   type BaseTileCode,
@@ -537,9 +536,4 @@ function centerX(box: NormalizedBox) {
 
 function clamp(value: number) {
   return Math.min(1, Math.max(0, value));
-}
-
-export function recognitionTilesToHash(tiles: readonly TileCode[]) {
-  const params = new URLSearchParams({ tiles: tiles.filter((tile) => ALL_TILE_CODES.includes(tile)).join(',') });
-  return `#/quick-score?${params.toString()}`;
 }

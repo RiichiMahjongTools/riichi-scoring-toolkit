@@ -23,6 +23,9 @@ export class OptionalRules {
   has_daisharin: boolean;
   has_daisharin_other_suits: boolean;
   has_daichisei: boolean;
+  has_sanrenkou: boolean;
+  has_isshoku_yonshun: boolean;
+  has_shiisanpuutaa: boolean;
   has_sashikomi_yakuman: boolean;
   limit_to_sextuple_yakuman: boolean;
   paarenchan_needs_yaku: boolean;
@@ -41,6 +44,9 @@ export class OptionalRules {
     this.has_daisharin_other_suits = params.has_daisharin_other_suits ?? false;
     this.has_daisharin = (params.has_daisharin ?? false) || this.has_daisharin_other_suits;
     this.has_daichisei = params.has_daichisei ?? false;
+    this.has_sanrenkou = params.has_sanrenkou ?? false;
+    this.has_isshoku_yonshun = params.has_isshoku_yonshun ?? false;
+    this.has_shiisanpuutaa = params.has_shiisanpuutaa ?? false;
     this.has_sashikomi_yakuman = params.has_sashikomi_yakuman ?? false;
     this.limit_to_sextuple_yakuman = params.limit_to_sextuple_yakuman ?? true;
     this.paarenchan_needs_yaku = params.paarenchan_needs_yaku ?? true;
@@ -65,6 +71,8 @@ export class HandConfig extends HandConstants {
   is_tenhou: boolean;
   is_renhou: boolean;
   is_chiihou: boolean;
+  is_tsubame_gaeshi: boolean;
+  is_kanfuri: boolean;
   is_open_riichi: boolean;
 
   is_dealer: boolean;
@@ -88,6 +96,8 @@ export class HandConfig extends HandConstants {
     is_tenhou?: boolean;
     is_renhou?: boolean;
     is_chiihou?: boolean;
+    is_tsubame_gaeshi?: boolean;
+    is_kanfuri?: boolean;
     is_open_riichi?: boolean;
     player_wind?: number | null;
     round_wind?: number | null;
@@ -113,6 +123,8 @@ export class HandConfig extends HandConstants {
     this.is_tenhou = params.is_tenhou ?? false;
     this.is_renhou = params.is_renhou ?? false;
     this.is_chiihou = params.is_chiihou ?? false;
+    this.is_tsubame_gaeshi = params.is_tsubame_gaeshi ?? false;
+    this.is_kanfuri = params.is_kanfuri ?? false;
     this.is_open_riichi = params.is_open_riichi ?? false;
 
     this.player_wind = params.player_wind ?? null;

@@ -806,56 +806,9 @@
   background: color-mix(in srgb, var(--mj-soft) 70%, var(--mj-surface));
 }
 
-.mj-legacy-custom-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  min-height: 44px;
-  padding: 0 12px;
-  border-radius: var(--mj-radius-sm);
-  background: var(--mj-soft);
-}
-
-.mj-legacy-page .mj-chip-row {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.mj-legacy-page .mj-chip-row .mj-chip {
-  min-height: 34px;
-  padding: 0 6px;
-}
-
 .mj-legacy-page .mj-score-hero strong {
   font-family: 'Geist Mono', ui-monospace, monospace;
   font-weight: 900;
-}
-
-.mj-legacy-page > .mj-alert {
-  gap: 8px;
-  padding: 10px 11px;
-}
-
-.mj-legacy-page > .mj-alert strong {
-  color: var(--mj-gold);
-}
-
-.mj-legacy-custom-row span {
-  color: var(--mj-muted);
-  font-size: 13px;
-  font-weight: 900;
-}
-
-.mj-legacy-custom-row b {
-  display: inline-grid;
-  place-items: center;
-  min-height: 28px;
-  padding: 0 10px;
-  border: 1px solid var(--mj-gold);
-  border-radius: 999px;
-  color: var(--mj-gold);
-  font-size: 13px;
 }
 
 .mj-yaku-detail-page .mj-detail-block {
@@ -2254,6 +2207,12 @@
   background: color-mix(in srgb, var(--mj-soft) 55%, var(--mj-surface));
   color: var(--mj-muted);
   font-weight: 800;
+}
+
+.mj-scan-preview--empty {
+  grid-template-rows: auto auto;
+  place-content: center;
+  gap: 24px;
 }
 
 .mj-scan-preview svg {

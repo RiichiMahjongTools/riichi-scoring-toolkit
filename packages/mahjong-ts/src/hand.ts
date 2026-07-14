@@ -48,6 +48,10 @@ export class HandCalculator {
   static ERR_RENHOU_WITH_TSUMO = "renhou_with_tsumo_not_allowed";
   static ERR_RENHOU_WITH_MELD = "renhou_with_meld_not_allowed";
 
+  static ERR_TSUBAME_GAESHI_WITH_TSUMO = "tsubame_gaeshi_with_tsumo_not_allowed";
+  static ERR_TSUBAME_GAESHI_WITH_OPEN_HAND = "tsubame_gaeshi_with_open_hand_not_allowed";
+  static ERR_KANFURI_WITH_TSUMO = "kanfuri_with_tsumo_not_allowed";
+
   estimate_hand_value(
     tiles: Iterable<number>,
     win_tile: number,
@@ -154,6 +158,15 @@ export class HandCalculator {
     }
     if (config.is_renhou && melds.length > 0) {
       return new HandResponse({ error: HandCalculator.ERR_RENHOU_WITH_MELD });
+    }
+    if (config.is_tsubame_gaeshi && config.is_tsumo) {
+      return new HandResponse({ error: HandCalculator.ERR_TSUBAME_GAESHI_WITH_TSUMO });
+    }
+    if (config.is_tsubame_gaeshi && isOpenHand) {
+      return new HandResponse({ error: HandCalculator.ERR_TSUBAME_GAESHI_WITH_OPEN_HAND });
+    }
+    if (config.is_kanfuri && config.is_tsumo) {
+      return new HandResponse({ error: HandCalculator.ERR_KANFURI_WITH_TSUMO });
     }
 
     if (!config.options.has_double_yakuman) {
@@ -265,6 +278,8 @@ export class HandCalculator {
         if (config.is_haitei) handYaku.push(config.yaku.haitei);
         if (config.is_houtei) handYaku.push(config.yaku.houtei);
         if (config.is_renhou) handYaku.push(config.options.renhou_as_yakuman ? config.yaku.renhou_yakuman : config.yaku.renhou);
+        if (config.is_tsubame_gaeshi) handYaku.push(config.yaku.tsubame_gaeshi);
+        if (config.is_kanfuri) handYaku.push(config.yaku.kanfuri);
         if (config.is_tenhou) handYaku.push(config.yaku.tenhou);
         if (config.is_chiihou) handYaku.push(config.yaku.chiihou);
 
@@ -296,10 +311,16 @@ export class HandCalculator {
             if (config.yaku.ryanpeiko.is_condition_met(hand)) handYaku.push(config.yaku.ryanpeiko);
             else if (config.yaku.iipeiko.is_condition_met(hand)) handYaku.push(config.yaku.iipeiko);
           }
+          if (config.options.has_isshoku_yonshun && config.yaku.isshoku_yonshun.is_condition_met(hand)) {
+            handYaku.push(config.yaku.isshoku_yonshun);
+          }
           if (suitMask === ALL_SUITS_MASK && config.yaku.sanshoku.is_condition_met(hand)) handYaku.push(config.yaku.sanshoku);
         }
 
         if (ponSets.length > 0 || kanSets.length > 0) {
+          if (config.options.has_sanrenkou && config.yaku.sanrenkou.is_condition_met(hand)) {
+            handYaku.push(config.yaku.sanrenkou);
+          }
           if (config.yaku.toitoi.is_condition_met(hand)) handYaku.push(config.yaku.toitoi);
           if (config.yaku.sanankou.is_condition_met(hand, win_tile, melds, config.is_tsumo)) handYaku.push(config.yaku.sanankou);
           if (suitMask === ALL_SUITS_MASK && config.yaku.sanshoku_douko.is_condition_met(hand)) handYaku.push(config.yaku.sanshoku_douko);
@@ -388,6 +409,69 @@ export class HandCalculator {
 
         calculatedHands.push({ cost, error, hand_yaku: handYaku, han, fu, fu_details: fuDetails });
       }
+    }
+
+    if (
+      !isOpenHand &&
+      config.options.has_shiisanpuutaa &&
+      config.yaku.shiisanpuutaa.is_condition_met(null, tiles34)
+    ) {
+      let handYaku: Yaku[] = [config.yaku.shiisanpuutaa];
+
+      if (config.is_tsumo) handYaku.push(config.yaku.tsumo);
+      if (config.is_riichi && !config.is_daburu_riichi) {
+        handYaku.push(config.is_open_riichi ? config.yaku.open_riichi : config.yaku.riichi);
+      }
+      if (config.is_daburu_riichi) {
+        handYaku.push(config.is_open_riichi ? config.yaku.daburu_open_riichi : config.yaku.daburu_riichi);
+      }
+      if (config.is_ippatsu) handYaku.push(config.yaku.ippatsu);
+      if (config.is_rinshan) handYaku.push(config.yaku.rinshan);
+      if (config.is_chankan) handYaku.push(config.yaku.chankan);
+      if (config.is_haitei) handYaku.push(config.yaku.haitei);
+      if (config.is_houtei) handYaku.push(config.yaku.houtei);
+      if (config.is_renhou) {
+        handYaku.push(config.options.renhou_as_yakuman ? config.yaku.renhou_yakuman : config.yaku.renhou);
+      }
+      if (config.is_tsubame_gaeshi) handYaku.push(config.yaku.tsubame_gaeshi);
+      if (config.is_kanfuri) handYaku.push(config.yaku.kanfuri);
+      if (config.is_tenhou) handYaku.push(config.yaku.tenhou);
+      if (config.is_chiihou) handYaku.push(config.yaku.chiihou);
+
+      let yakumanList = handYaku.filter((yaku) => yaku.is_yakuman);
+      if (yakumanList.length > 0) {
+        if (!isAotenjou) {
+          handYaku = yakumanList;
+        } else {
+          (scoresCalculator as Aotenjou).aotenjou_filter_yaku(handYaku, config);
+          yakumanList = [];
+        }
+      }
+
+      let han = handYaku.reduce((total, yaku) => total + yaku.han_closed, 0);
+      if (yakumanList.length === 0) {
+        if (precomputedDora) {
+          config.yaku.dora.han_open = precomputedDora;
+          config.yaku.dora.han_closed = precomputedDora;
+          handYaku.push(config.yaku.dora);
+          han += precomputedDora;
+        }
+        if (precomputedAkaDora) {
+          config.yaku.aka_dora.han_open = precomputedAkaDora;
+          config.yaku.aka_dora.han_closed = precomputedAkaDora;
+          handYaku.push(config.yaku.aka_dora);
+          han += precomputedAkaDora;
+        }
+        if (precomputedUraDora) {
+          config.yaku.ura_dora.han_closed = precomputedUraDora;
+          handYaku.push(config.yaku.ura_dora);
+          han += precomputedUraDora;
+        }
+      }
+
+      const fu = 30;
+      const cost = scoresCalculator.calculate_scores(han, fu, config, yakumanList.length > 0);
+      calculatedHands.push({ cost, error: null, hand_yaku: handYaku, han, fu, fu_details: [] });
     }
 
     if (!isOpenHand && config.yaku.kokushi.is_condition_met(null, tiles34)) {
