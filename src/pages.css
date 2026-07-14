@@ -1140,44 +1140,8 @@
   padding: 12px 14px 14px;
 }
 
-.mj-practice-stat-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-}
-
 .mj-practice-random-action {
   display: block;
-}
-
-.mj-practice-stat-card {
-  display: grid;
-  gap: 4px;
-  min-height: 62px;
-  padding: 10px 12px;
-  border-radius: 11px;
-  background: color-mix(in srgb, var(--mj-soft) 84%, var(--mj-surface));
-}
-
-.mj-practice-stat-card small {
-  color: var(--mj-muted);
-  font-size: 12px;
-  font-weight: 900;
-}
-
-.mj-practice-stat-card strong {
-  color: var(--mj-ink);
-  font-size: 18px;
-  font-weight: 900;
-  line-height: 1.05;
-}
-
-.mj-practice-stat-card--green strong {
-  color: var(--mj-green);
-}
-
-.mj-practice-stat-card--gold strong {
-  color: var(--mj-gold);
 }
 
 .mj-practice-hand-card .mj-tile-strip__row {
@@ -1639,35 +1603,6 @@
   border-radius: 16px;
   background: var(--mj-surface);
   box-shadow: var(--mj-shadow);
-}
-
-.mj-comeback-sheet__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 15px 16px 13px;
-  border-bottom: 1px solid color-mix(in srgb, var(--mj-line) 68%, transparent);
-}
-
-.mj-comeback-sheet__header > div:first-child {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-}
-
-.mj-comeback-sheet__header h2 {
-  margin: 0;
-  color: var(--mj-ink);
-  font-size: 20px;
-  font-weight: 900;
-  line-height: 1.25;
-}
-
-.mj-comeback-sheet__header span {
-  color: var(--mj-muted);
-  font-size: 15px;
-  font-weight: 800;
 }
 
 .mj-comeback-sheet__body {

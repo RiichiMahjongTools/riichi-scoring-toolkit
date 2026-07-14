@@ -32,7 +32,6 @@ import {
 } from '../domain';
 import { WIND_LABELS, formatComebackAnswer, formatPoints, formatWinMethod } from './shared';
 
-const RANK_LABELS = ['一', '二', '三', '四', '五', '六', '七', '八', '九'];
 const COMEBACK_OPTION_ROWS: Array<Array<FuValue | 'impossible'>> = [
   [20, 25, 30, 40, 50, 60],
   [70, 80, 90, 100, 110, 'impossible'],
@@ -49,23 +48,6 @@ function isComebackOptionAvailable(han: number, option: FuValue | 'impossible'):
   return getLegalRonFuOptions(han).includes(option);
 }
 
-function PracticeStats({
-  items,
-}: {
-  items: Array<{ label: string; value: string; tone?: 'default' | 'green' | 'gold' }>;
-}) {
-  return (
-    <div className="mj-practice-stat-grid">
-      {items.map((item) => (
-        <span key={item.label} className={item.tone ? `mj-practice-stat-card mj-practice-stat-card--${item.tone}` : 'mj-practice-stat-card'}>
-          <small>{item.label}</small>
-          <strong>{item.value}</strong>
-        </span>
-      ))}
-    </div>
-  );
-}
-
 const MAX_RECENT_PRACTICE_QUESTIONS = 20;
 const MAX_QUESTION_SELECTION_ATTEMPTS = 32;
 
@@ -80,7 +62,6 @@ function useGeneratedPracticeQuestion<TQuestion extends { id: string }>(
   generateQuestion: (seed: number) => TQuestion,
 ) {
   const [seed, setSeed] = useState(0);
-  const [ordinal, setOrdinal] = useState(1);
   const recentIds = useRef<string[]>([]);
   const question = useMemo(() => generateQuestion(seed), [generateQuestion, seed]);
 
@@ -96,12 +77,10 @@ function useGeneratedPracticeQuestion<TQuestion extends { id: string }>(
 
     recentIds.current = blockedIds;
     setSeed(candidateSeed);
-    setOrdinal((value) => value + 1);
   };
 
   return {
     question,
-    ordinal,
     nextQuestion: () => selectQuestion((seed + 1) >>> 0, 1),
     randomQuestion: () => selectQuestion(browserRandomSeed(), 0x9e3779b9),
   };
@@ -131,7 +110,6 @@ export function ChinitsuPracticePage() {
   const practice = useGeneratedPracticeQuestion(generateChinituWaitQuestion);
   const [selectedRanks, setSelectedRanks] = useState<number[]>([]);
   const [feedback, setFeedback] = useState<PracticeFeedback<number[]> | null>(null);
-  const [streak, setStreak] = useState(0);
   const { question } = practice;
 
   const toggleRank = (rank: number) => {
@@ -145,7 +123,6 @@ export function ChinitsuPracticePage() {
     if (feedback) return;
     const result = checkChinituWaitAnswer(question, selectedRanks);
     setFeedback(result);
-    setStreak((value) => (result.correct ? value + 1 : 0));
   };
 
   const resetQuestion = () => {
@@ -168,14 +145,6 @@ export function ChinitsuPracticePage() {
 
   return (
     <div className="mj-page-stack mj-practice-design mj-chinitsu-page">
-      <PracticeStats
-        items={[
-          { label: '题号', value: `第${practice.ordinal}题` },
-          { label: '状态', value: `连对 ${streak}`, tone: streak > 0 ? 'green' : 'default' },
-          { label: '花色', value: `${RANK_LABELS[0]}-${RANK_LABELS[8]}${question.suit === 'm' ? '万' : question.suit === 'p' ? '筒' : '索'}` },
-        ]}
-      />
-
       <SectionCard className="mj-practice-hand-card mj-chinitsu-hand-card" title="清一色手牌">
         <TileStrip tileSize="xs" tiles={question.handTiles.map(tileToCode)} />
       </SectionCard>
@@ -253,7 +222,6 @@ export function FuPracticePage() {
   const practice = useGeneratedPracticeQuestion(generateFuPracticeQuestion);
   const [answerFu, setAnswerFu] = useState<number | null>(null);
   const [feedback, setFeedback] = useState<PracticeFeedback<number> | null>(null);
-  const [streak, setStreak] = useState(0);
   const { question } = practice;
   const rows = (feedback?.breakdown ?? question.breakdown).map((line, index) => ({
     id: `${index}-${line}`,
@@ -266,7 +234,6 @@ export function FuPracticePage() {
     const result = checkFuPracticeAnswer(question, fu);
     setAnswerFu(fu);
     setFeedback(result);
-    setStreak((value) => (result.correct ? value + 1 : 0));
   };
 
   const resetQuestion = () => {
@@ -286,20 +253,11 @@ export function FuPracticePage() {
 
   return (
     <div className="mj-page-stack mj-practice-design mj-fu-practice-page">
-      <PracticeStats
-        items={[
-          { label: '题号', value: `第${practice.ordinal}题` },
-          { label: '状态', value: `连对 ${streak}`, tone: streak > 0 ? 'green' : 'default' },
-          { label: '场况', value: `${WIND_LABELS[question.roundWind]}场${WIND_LABELS[question.seatWind]}家` },
-        ]}
-      />
-
       <SectionCard className="mj-practice-hand-card" title="题面手牌">
         <PracticeHandScene handGroups={question.handGroups} />
         <div className="mj-practice-hand-meta">
           <Chip selected>{formatWinMethod(question.winMethod)}</Chip>
-          <Chip selected>场风{WIND_LABELS[question.roundWind]}</Chip>
-          <Chip selected>自风{WIND_LABELS[question.seatWind]}</Chip>
+          <Chip selected>{WIND_LABELS[question.roundWind]}场{WIND_LABELS[question.seatWind]}家</Chip>
           {question.visibleConditions.map((condition) => <Chip key={condition} selected>{condition}</Chip>)}
         </div>
       </SectionCard>
@@ -537,14 +495,6 @@ export function PointPracticePage() {
 
   return (
     <div className="mj-page-stack mj-practice-design mj-point-practice-page">
-      <PracticeStats
-        items={[
-          { label: '题号', value: `第${practice.ordinal}题` },
-          { label: '状态', value: `连对 ${streak}`, tone: streak > 0 ? 'green' : 'default' },
-          { label: '答案口径', value: '总获得点' },
-        ]}
-      />
-
       <SectionCard aria-label="题面手牌" className="mj-practice-hand-card mj-point-hand-card">
         <PracticeHandScene handGroups={question.handGroups} />
         <div className="mj-practice-hand-meta">
@@ -656,13 +606,6 @@ export function ComebackPracticePage() {
   return (
     <div className="mj-page-stack mj-practice-design mj-comeback-practice-page">
       <section className="mj-comeback-sheet">
-        <header className="mj-comeback-sheet__header">
-          <div>
-            <h2>作答</h2>
-            <span>第{practice.ordinal}题 · {streak}连正</span>
-          </div>
-        </header>
-
         <div className="mj-comeback-sheet__body">
           <p className="mj-comeback-question">
             您的自风是<strong>{WIND_LABELS[question.userSeatWind]}</strong>，
