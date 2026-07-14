@@ -92,7 +92,7 @@ export const NAV_ENTRIES: NavEntry[] = [
     id: 'chinitsu',
     group: '练习',
     title: '清一色听牌练习',
-    subtitle: '从一到九万中选择全部听牌',
+    subtitle: '从一到九同花色牌中选择全部听牌',
     status: 'ready',
     icon: Layers,
   },

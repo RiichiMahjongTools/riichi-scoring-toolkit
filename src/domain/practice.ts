@@ -1,6 +1,15 @@
-import { calculateHandEfficiency } from './efficiency';
+import {
+  derivePracticeSeed,
+  generateChinitsuHand,
+  generateScoredPracticeHand,
+  makePracticeQuestionId,
+  SeededRandom,
+  type PracticeHandGroup,
+} from './practice-generation';
 import { calculateScoreCost, getLegalRonFuOptions, type FuValue, type HanValue, type WinMethod } from './points';
-import { createTile, parseTileCodes, tileLabel, tileRank, tileSuit, type Tile, type TileCode, type Wind } from './tiles';
+import { createTile, tileLabel, type Tile, type TileCode, type Wind } from './tiles';
+
+export type { PracticeHandGroup, PracticeHandGroupKind } from './practice-generation';
 
 export interface PracticeFeedback<TAnswer> {
   correct: boolean;
@@ -20,9 +29,11 @@ export interface ChinituWaitQuestion {
 export interface FuPracticeQuestion {
   id: string;
   handTiles: Tile[];
+  handGroups: readonly PracticeHandGroup[];
   roundWind: Wind;
   seatWind: Wind;
   winMethod: WinMethod;
+  visibleConditions: readonly string[];
   answerFu: number;
   breakdown: string[];
 }
@@ -30,25 +41,17 @@ export interface FuPracticeQuestion {
 export interface PointPracticeQuestion {
   id: string;
   handTiles: Tile[];
-  handGroups: readonly PointPracticeHandGroup[];
+  handGroups: readonly PracticeHandGroup[];
   roundWind: Wind;
   seatWind: Wind;
   winMethod: WinMethod;
+  visibleConditions: readonly string[];
+  isSevenPairs: boolean;
   han: number;
   fu: number;
   noYaku: boolean;
   answerTotalPoints: number;
   breakdown: string[];
-}
-
-export type PointPracticeHandGroupKind = 'sequence' | 'triplet' | 'pair' | 'chi' | 'pon' | 'openKan' | 'closedKan';
-
-export interface PointPracticeHandGroup {
-  kind: PointPracticeHandGroupKind;
-  tiles: readonly TileCode[];
-  calledIndex?: number;
-  backIndexes?: readonly number[];
-  winningIndex?: number;
 }
 
 export interface ComebackPracticeQuestion {
@@ -66,136 +69,34 @@ export const FU_PRACTICE_OPTIONS: readonly number[] = [
   20, 25, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170,
 ];
 
-const CHINITU_FIXTURE_CODES: readonly TileCode[][] = [
-  ['m1', 'm1', 'm1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7', 'm8', 'm9', 'm9', 'm9'],
-  ['m2', 'm3', 'm3', 'm4', 'm4', 'm5', 'm5', 'm6', 'm6', 'm7', 'm7', 'm8', 'm8'],
-];
-
-export const CHINITU_WAIT_QUESTION_COUNT = CHINITU_FIXTURE_CODES.length;
-
-const FU_QUESTIONS: readonly Omit<FuPracticeQuestion, 'handTiles'>[] & { handTileCodes?: never } = [
-  {
-    id: 'fu-menron-edge-yakuhai',
-    roundWind: 'east',
-    seatWind: 'south',
-    winMethod: 'ron',
-    answerFu: 40,
-    breakdown: ['底符 20', '门前清荣和 10', '边张听牌 2', '役牌雀头 2', '合计 34，进位 40 符'],
-  },
-  {
-    id: 'fu-tsumo-open-triplet',
-    roundWind: 'south',
-    seatWind: 'south',
-    winMethod: 'tsumo',
-    answerFu: 40,
-    breakdown: ['底符 20', '自摸 2', '幺九暗刻 8', '连风雀头 4', '合计 34，进位 40 符'],
-  },
-];
-
-export const FU_PRACTICE_QUESTION_COUNT = FU_QUESTIONS.length;
-
-const FU_HANDS: Record<string, TileCode[]> = {
-  'fu-menron-edge-yakuhai': ['m1', 'm2', 'm3', 'm7', 'm8', 'm9', 'p1', 'p2', 'p3', 's7', 's8', 's9', 'z5', 'z5'],
-  'fu-tsumo-open-triplet': ['m1', 'm1', 'm1', 'p2', 'p3', 'p4', 'p7', 'p8', 'p9', 's4', 's5', 's6', 'z2', 'z2'],
-};
-
-const POINT_NO_YAKU_GROUPS: readonly PointPracticeHandGroup[] = [
-  { kind: 'sequence', tiles: ['m1', 'm2', 'm3'] },
-  { kind: 'sequence', tiles: ['p1', 'p2', 'p3'] },
-  { kind: 'sequence', tiles: ['s7', 's8', 's9'] },
-  { kind: 'sequence', tiles: ['m7', 'm8', 'm9'], winningIndex: 2 },
-  { kind: 'pair', tiles: ['z1', 'z1'] },
-];
-
-const POINT_PRACTICE_VARIANTS = [
-  {
-    han: 1,
-    fu: 30,
-    seatWind: 'north' as const,
-    winMethod: 'ron' as const,
-    handGroups: [
-      { kind: 'sequence', tiles: ['m2', 'm3', 'm4'] },
-      { kind: 'sequence', tiles: ['m3', 'm4', 'm5'] },
-      { kind: 'sequence', tiles: ['p2', 'p3', 'p4'] },
-      { kind: 'sequence', tiles: ['s6', 's7', 's8'] },
-      { kind: 'pair', tiles: ['p5', 'p5'], winningIndex: 1 },
-    ] satisfies readonly PointPracticeHandGroup[],
-  },
-  {
-    han: 2,
-    fu: 30,
-    seatWind: 'south' as const,
-    winMethod: 'ron' as const,
-    handGroups: [
-      { kind: 'sequence', tiles: ['m7', 'm8', 'm9'] },
-      { kind: 'sequence', tiles: ['p3', 'p4', 'p5'] },
-      { kind: 'pair', tiles: ['z5', 'z5'] },
-      { kind: 'chi', tiles: ['s3', 's4', 's5'], calledIndex: 0 },
-      { kind: 'sequence', tiles: ['m1', 'm2', 'm3'], winningIndex: 2 },
-    ] satisfies readonly PointPracticeHandGroup[],
-  },
-  {
-    han: 2,
-    fu: 40,
-    seatWind: 'east' as const,
-    winMethod: 'tsumo' as const,
-    handGroups: [
-      { kind: 'sequence', tiles: ['m3', 'm4', 'm5'] },
-      { kind: 'sequence', tiles: ['p2', 'p3', 'p4'] },
-      { kind: 'sequence', tiles: ['s6', 's7', 's8'] },
-      { kind: 'pair', tiles: ['p5', 'p5'], winningIndex: 1 },
-      { kind: 'pon', tiles: ['z2', 'z2', 'z2'], calledIndex: 0 },
-    ] satisfies readonly PointPracticeHandGroup[],
-  },
-  {
-    han: 3,
-    fu: 40,
-    seatWind: 'west' as const,
-    winMethod: 'tsumo' as const,
-    handGroups: [
-      { kind: 'sequence', tiles: ['m2', 'm3', 'm4'] },
-      { kind: 'triplet', tiles: ['p2', 'p2', 'p2'] },
-      { kind: 'sequence', tiles: ['s6', 's7', 's8'] },
-      { kind: 'pair', tiles: ['p5', 'p5'], winningIndex: 1 },
-      { kind: 'closedKan', tiles: ['z3', 'z3', 'z3', 'z3'], backIndexes: [0, 3] },
-    ] satisfies readonly PointPracticeHandGroup[],
-  },
-] as const;
-
-export const POINT_PRACTICE_QUESTION_COUNT = POINT_PRACTICE_VARIANTS.length + 1;
-export const COMEBACK_PRACTICE_QUESTION_COUNT = 6;
-
-function pick<T>(items: readonly T[], seed: number): T {
-  return items[Math.abs(seed) % items.length];
-}
-
-function tilesFromPointGroups(groups: readonly PointPracticeHandGroup[]): Tile[] {
-  return parseTileCodes(groups.flatMap((group) => group.tiles));
-}
-
-function ranksFromEffectiveTiles(question: ChinituWaitQuestion): number[] {
-  const result = calculateHandEfficiency({ mode: 'yonma', handTiles: question.handTiles });
-  return result.effective_tiles
-    .filter((entry) => tileSuit(entry.tile) === question.suit)
-    .map((entry) => Number(tileRank(entry.tile)))
-    .sort((a, b) => a - b);
-}
-
 function uniqueSortedNumbers(values: readonly number[]): number[] {
-  return [...new Set(values)].sort((a, b) => a - b);
+  return [...new Set(values)].sort((left, right) => left - right);
+}
+
+function handFingerprintPayload(hand: {
+  handGroups: readonly PracticeHandGroup[];
+  roundWind: Wind;
+  seatWind: Wind;
+  winMethod: WinMethod;
+  visibleConditions: readonly string[];
+}): Record<string, unknown> {
+  return {
+    groups: hand.handGroups.map((group) => ({
+      kind: group.kind,
+      tiles: group.tiles,
+      calledIndex: group.calledIndex,
+      backIndexes: group.backIndexes,
+      winningIndex: group.winningIndex,
+    })),
+    roundWind: hand.roundWind,
+    seatWind: hand.seatWind,
+    winMethod: hand.winMethod,
+    visibleConditions: hand.visibleConditions,
+  };
 }
 
 export function generateChinituWaitQuestion(seed = 0): ChinituWaitQuestion {
-  const codes = pick(CHINITU_FIXTURE_CODES, seed);
-  const question: ChinituWaitQuestion = {
-    id: `chinitu-${seed % CHINITU_FIXTURE_CODES.length}`,
-    suit: codes[0][0] as 'm' | 'p' | 's',
-    handTiles: parseTileCodes(codes),
-    candidateRanks: [1, 2, 3, 4, 5, 6, 7, 8, 9],
-    correctWaits: [],
-  };
-  question.correctWaits = ranksFromEffectiveTiles(question);
-  return question;
+  return generateChinitsuHand(seed);
 }
 
 export function checkChinituWaitAnswer(
@@ -217,10 +118,24 @@ export function checkChinituWaitAnswer(
 }
 
 export function generateFuPracticeQuestion(seed = 0): FuPracticeQuestion {
-  const base = pick(FU_QUESTIONS, seed);
+  const hand = generateScoredPracticeHand(seed, 'fu');
+  const answerFu = hand.score.fu;
+  if (answerFu === undefined || !FU_PRACTICE_OPTIONS.includes(answerFu)) {
+    throw new Error(`Generated fu practice answer is outside the supported range: ${answerFu}`);
+  }
+  const breakdown = (hand.score.fu_details ?? []).map((item) => `${item.name} ${item.fu} 符`);
+  breakdown.push(`合计并进位为 ${answerFu} 符`);
+
   return {
-    ...base,
-    handTiles: parseTileCodes(FU_HANDS[base.id]),
+    id: makePracticeQuestionId('fu', handFingerprintPayload(hand)),
+    handTiles: hand.handTiles,
+    handGroups: hand.handGroups,
+    roundWind: hand.roundWind,
+    seatWind: hand.seatWind,
+    winMethod: hand.winMethod,
+    visibleConditions: hand.visibleConditions,
+    answerFu,
+    breakdown,
   };
 }
 
@@ -233,47 +148,63 @@ export function checkFuPracticeAnswer(question: FuPracticeQuestion, answerFu: nu
   };
 }
 
+function formatYakuHan(han: number | 'yakuman' | 'double-yakuman'): string {
+  if (han === 'yakuman') return '役满';
+  if (han === 'double-yakuman') return '双倍役满';
+  return `${han} 番`;
+}
+
 export function generatePointPracticeQuestion(seed = 0): PointPracticeQuestion {
-  const normalizedSeed = Math.abs(seed) % POINT_PRACTICE_QUESTION_COUNT;
-  if (normalizedSeed === POINT_PRACTICE_VARIANTS.length) {
+  const choiceRng = new SeededRandom(derivePracticeSeed(seed, 'point-question-kind'));
+  const noYaku = choiceRng.int(10) === 0;
+  const sevenPairs = !noYaku && choiceRng.int(10) === 0;
+  const hand = generateScoredPracticeHand(seed, noYaku ? 'point-no-yaku' : 'point-valid', { sevenPairs });
+  const payload = handFingerprintPayload(hand);
+
+  if (noYaku) {
     return {
-      id: 'point-no-yaku',
-      handTiles: tilesFromPointGroups(POINT_NO_YAKU_GROUPS),
-      handGroups: POINT_NO_YAKU_GROUPS,
-      roundWind: 'south',
-      seatWind: 'north',
-      winMethod: 'ron',
+      id: makePracticeQuestionId('point', { ...payload, noYaku: true }),
+      handTiles: hand.handTiles,
+      handGroups: hand.handGroups,
+      roundWind: hand.roundWind,
+      seatWind: hand.seatWind,
+      winMethod: hand.winMethod,
+      visibleConditions: hand.visibleConditions,
+      isSevenPairs: false,
       han: 0,
       fu: 0,
       noYaku: true,
       answerTotalPoints: 0,
-      breakdown: ['题目无役时标准答案为 0。'],
+      breakdown: ['该牌形没有役，标准答案为 0 点。'],
     };
   }
 
-  const variant = POINT_PRACTICE_VARIANTS[normalizedSeed];
-  const point = calculateScoreCost({
-    han: variant.han,
-    fu: variant.fu,
-    is_dealer: variant.seatWind === 'east',
-    is_tsumo: variant.winMethod === 'tsumo',
-  });
+  const fu = hand.score.fu;
+  const cost = hand.score.cost;
+  if (fu === undefined || !cost) throw new Error('Generated point practice hand has no score details');
+  const yaku = hand.score.yaku.map((item) => `${item.name} ${formatYakuHan(item.han)}`).join('、');
+  const payment = hand.winMethod === 'ron'
+    ? `荣和 ${cost.main.toLocaleString('zh-CN')} 点`
+    : `自摸总计 ${cost.total.toLocaleString('zh-CN')} 点`;
 
   return {
-    id: `point-${variant.han}-${variant.fu}-${variant.seatWind}-${variant.winMethod}`,
-    handTiles: tilesFromPointGroups(variant.handGroups),
-    handGroups: variant.handGroups,
-    roundWind: 'south',
-    seatWind: variant.seatWind,
-    winMethod: variant.winMethod,
-    han: variant.han,
-    fu: variant.fu,
+    id: makePracticeQuestionId('point', { ...payload, noYaku: false }),
+    handTiles: hand.handTiles,
+    handGroups: hand.handGroups,
+    roundWind: hand.roundWind,
+    seatWind: hand.seatWind,
+    winMethod: hand.winMethod,
+    visibleConditions: hand.visibleConditions,
+    isSevenPairs: hand.isSevenPairs,
+    han: hand.score.han,
+    fu,
     noYaku: false,
-    answerTotalPoints: point.cost.total,
+    answerTotalPoints: cost.total,
     breakdown: [
-      `${variant.han} 番 ${variant.fu} 符`,
-      variant.seatWind === 'east' ? '庄家' : '子家',
-      variant.winMethod === 'ron' ? `荣和 ${point.cost.main} 点` : `自摸合计 ${point.cost.total} 点`,
+      `役种：${yaku}`,
+      `${hand.score.han} 番 ${fu} 符`,
+      hand.score.is_dealer ? '庄家' : '闲家',
+      payment,
     ],
   };
 }
@@ -300,17 +231,43 @@ export function minimumFuForComeback(params: {
 }
 
 export function generateComebackPracticeQuestion(seed = 0): ComebackPracticeQuestion {
-  const pointGap = seed % 2 === 0 ? 5000 : 7700;
-  const userSeatWind: Wind = seed % 3 === 0 ? 'west' : 'east';
-  const targetSeatWind: Wind = userSeatWind === 'east' ? 'south' : 'east';
+  const rng = new SeededRandom(derivePracticeSeed(seed, 'comeback'));
   const hanTiers: HanValue[] = [1, 2, 3, 4];
-  const isDealer = userSeatWind === 'east';
-  const answers = Object.fromEntries(
-    hanTiers.map((han) => [han, minimumFuForComeback({ han, pointGap, isDealer })]),
-  ) as Record<number, FuValue | 'impossible'>;
 
+  for (let attempt = 0; attempt < 256; attempt += 1) {
+    const userSeatWind = rng.pick<Wind>(['east', 'south', 'west', 'north']);
+    const targetSeatWind = rng.pick<Wind>(['east', 'south', 'west', 'north'].filter((wind) => wind !== userSeatWind) as Wind[]);
+    const pointGap = 1000 + rng.int(111) * 100;
+    const isDealer = userSeatWind === 'east';
+    const answers = Object.fromEntries(
+      hanTiers.map((han) => [han, minimumFuForComeback({ han, pointGap, isDealer })]),
+    ) as Record<number, FuValue | 'impossible'>;
+    const answerValues = Object.values(answers);
+    if (!answerValues.includes('impossible') || !answerValues.some((answer) => answer !== 'impossible')) continue;
+
+    return {
+      id: makePracticeQuestionId('comeback', { userSeatWind, targetSeatWind, pointGap, answers }),
+      userSeatWind,
+      targetSeatWind,
+      pointGap,
+      winMethod: 'ron',
+      hanTiers,
+      answers,
+      breakdown: hanTiers.map((han) => {
+        const answer = answers[han];
+        return `${han} 番：${answer === 'impossible' ? '不可逆转' : `最低 ${answer} 符`}`;
+      }),
+    };
+  }
+
+  const userSeatWind: Wind = normalizeComebackSeat(seed);
+  const targetSeatWind: Wind = userSeatWind === 'east' ? 'south' : 'east';
+  const pointGap = userSeatWind === 'east' ? 7700 : 5000;
+  const answers = Object.fromEntries(
+    hanTiers.map((han) => [han, minimumFuForComeback({ han, pointGap, isDealer: userSeatWind === 'east' })]),
+  ) as Record<number, FuValue | 'impossible'>;
   return {
-    id: `comeback-${userSeatWind}-${pointGap}`,
+    id: makePracticeQuestionId('comeback', { userSeatWind, targetSeatWind, pointGap, answers }),
     userSeatWind,
     targetSeatWind,
     pointGap,
@@ -322,6 +279,10 @@ export function generateComebackPracticeQuestion(seed = 0): ComebackPracticeQues
       return `${han} 番：${answer === 'impossible' ? '不可逆转' : `最低 ${answer} 符`}`;
     }),
   };
+}
+
+function normalizeComebackSeat(seed: number): Wind {
+  return (Math.trunc(seed) >>> 0) % 2 === 0 ? 'west' : 'east';
 }
 
 export function checkComebackPracticeAnswer(

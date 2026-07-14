@@ -1,5 +1,5 @@
 import { AlertCircle, BookOpen, Calculator, Check, Eye, Shuffle, Sparkles, X } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 
 import {
   ActionButton,
@@ -13,10 +13,6 @@ import {
 } from '../components';
 import {
   FU_PRACTICE_OPTIONS,
-  CHINITU_WAIT_QUESTION_COUNT,
-  COMEBACK_PRACTICE_QUESTION_COUNT,
-  FU_PRACTICE_QUESTION_COUNT,
-  POINT_PRACTICE_QUESTION_COUNT,
   buildHanFuTableRow,
   checkChinituWaitAnswer,
   checkComebackPracticeAnswer,
@@ -26,11 +22,12 @@ import {
   generateComebackPracticeQuestion,
   generateFuPracticeQuestion,
   generatePointPracticeQuestion,
+  getLegalFuOptions,
   getLegalRonFuOptions,
   tileToCode,
   type FuValue,
-  type PointPracticeHandGroup,
-  type PointPracticeQuestion,
+  type HanValue,
+  type PracticeHandGroup,
   type PracticeFeedback,
 } from '../domain';
 import { WIND_LABELS, formatComebackAnswer, formatPoints, formatWinMethod } from './shared';
@@ -69,31 +66,45 @@ function PracticeStats({
   );
 }
 
-function nextPracticeSeed(
-  setSeed: (updater: (value: number) => number) => void,
-  reset: () => void,
-) {
-  reset();
-  setSeed((value) => value + 1);
+const MAX_RECENT_PRACTICE_QUESTIONS = 20;
+const MAX_QUESTION_SELECTION_ATTEMPTS = 32;
+
+function browserRandomSeed(): number {
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    return crypto.getRandomValues(new Uint32Array(1))[0];
+  }
+  return Math.floor(Math.random() * 0x100000000) >>> 0;
 }
 
-function randomPracticeSeed(
-  setSeed: (updater: (value: number) => number) => void,
-  reset: () => void,
-  questionCount: number,
+function useGeneratedPracticeQuestion<TQuestion extends { id: string }>(
+  generateQuestion: (seed: number) => TQuestion,
 ) {
-  reset();
-  setSeed((value) => {
-    if (questionCount <= 1) return value + 1;
+  const [seed, setSeed] = useState(0);
+  const [ordinal, setOrdinal] = useState(1);
+  const recentIds = useRef<string[]>([]);
+  const question = useMemo(() => generateQuestion(seed), [generateQuestion, seed]);
 
-    const currentIndex = ((value % questionCount) + questionCount) % questionCount;
-    let nextIndex = Math.floor(Math.random() * (questionCount - 1));
-    if (nextIndex >= currentIndex) nextIndex += 1;
+  const selectQuestion = (initialSeed: number, retryStep: number) => {
+    const blockedIds = [question.id, ...recentIds.current].slice(0, MAX_RECENT_PRACTICE_QUESTIONS);
+    let candidateSeed = initialSeed >>> 0;
 
-    const currentCycleStart = value - currentIndex;
-    const nextSeed = currentCycleStart + nextIndex;
-    return nextSeed > value ? nextSeed : nextSeed + questionCount;
-  });
+    for (let attempt = 0; attempt < MAX_QUESTION_SELECTION_ATTEMPTS; attempt += 1) {
+      const candidate = generateQuestion(candidateSeed);
+      if (!blockedIds.includes(candidate.id)) break;
+      candidateSeed = (candidateSeed + retryStep) >>> 0;
+    }
+
+    recentIds.current = blockedIds;
+    setSeed(candidateSeed);
+    setOrdinal((value) => value + 1);
+  };
+
+  return {
+    question,
+    ordinal,
+    nextQuestion: () => selectQuestion((seed + 1) >>> 0, 1),
+    randomQuestion: () => selectQuestion(browserRandomSeed(), 0x9e3779b9),
+  };
 }
 
 function RandomQuestionButton({ onClick }: { onClick: () => void }) {
@@ -117,20 +128,21 @@ function FeedbackBreakdown({ lines }: { lines: readonly string[] }) {
 }
 
 export function ChinitsuPracticePage() {
-  const [seed, setSeed] = useState(0);
+  const practice = useGeneratedPracticeQuestion(generateChinituWaitQuestion);
   const [selectedRanks, setSelectedRanks] = useState<number[]>([]);
   const [feedback, setFeedback] = useState<PracticeFeedback<number[]> | null>(null);
   const [streak, setStreak] = useState(0);
-  const question = useMemo(() => generateChinituWaitQuestion(seed), [seed]);
+  const { question } = practice;
 
   const toggleRank = (rank: number) => {
-    setFeedback(null);
+    if (feedback) return;
     setSelectedRanks((value) =>
       value.includes(rank) ? value.filter((current) => current !== rank) : [...value, rank].sort((a, b) => a - b),
     );
   };
 
   const submit = () => {
+    if (feedback) return;
     const result = checkChinituWaitAnswer(question, selectedRanks);
     setFeedback(result);
     setStreak((value) => (result.correct ? value + 1 : 0));
@@ -141,7 +153,15 @@ export function ChinitsuPracticePage() {
     setFeedback(null);
   };
 
-  const randomQuestion = () => randomPracticeSeed(setSeed, resetQuestion, CHINITU_WAIT_QUESTION_COUNT);
+  const nextQuestion = () => {
+    resetQuestion();
+    practice.nextQuestion();
+  };
+
+  const randomQuestion = () => {
+    resetQuestion();
+    practice.randomQuestion();
+  };
 
   const correctAnswerTiles = (feedback?.correctAnswer ?? question.correctWaits).map((rank) => `${question.suit}${rank}`);
   const userAnswerTiles = (feedback?.userAnswer ?? selectedRanks).map((rank) => `${question.suit}${rank}`);
@@ -150,7 +170,7 @@ export function ChinitsuPracticePage() {
     <div className="mj-page-stack mj-practice-design mj-chinitsu-page">
       <PracticeStats
         items={[
-          { label: '题号', value: `第${seed + 1}题` },
+          { label: '题号', value: `第${practice.ordinal}题` },
           { label: '状态', value: `连对 ${streak}`, tone: streak > 0 ? 'green' : 'default' },
           { label: '花色', value: `${RANK_LABELS[0]}-${RANK_LABELS[8]}${question.suit === 'm' ? '万' : question.suit === 'p' ? '筒' : '索'}` },
         ]}
@@ -204,6 +224,7 @@ export function ChinitsuPracticePage() {
                 ]
                   .filter(Boolean)
                   .join(' ')}
+                disabled={Boolean(feedback)}
                 type="button"
                 onClick={() => toggleRank(rank)}
               >
@@ -215,7 +236,7 @@ export function ChinitsuPracticePage() {
       </SectionCard>
 
       {feedback ? (
-        <ActionButton fullWidth icon={<Sparkles aria-hidden="true" />} onClick={() => nextPracticeSeed(setSeed, resetQuestion)}>
+        <ActionButton fullWidth icon={<Sparkles aria-hidden="true" />} onClick={nextQuestion}>
           下一题
         </ActionButton>
       ) : (
@@ -229,11 +250,11 @@ export function ChinitsuPracticePage() {
 }
 
 export function FuPracticePage() {
-  const [seed, setSeed] = useState(0);
+  const practice = useGeneratedPracticeQuestion(generateFuPracticeQuestion);
   const [answerFu, setAnswerFu] = useState<number | null>(null);
   const [feedback, setFeedback] = useState<PracticeFeedback<number> | null>(null);
   const [streak, setStreak] = useState(0);
-  const question = useMemo(() => generateFuPracticeQuestion(seed), [seed]);
+  const { question } = practice;
   const rows = (feedback?.breakdown ?? question.breakdown).map((line, index) => ({
     id: `${index}-${line}`,
     item: line,
@@ -241,6 +262,7 @@ export function FuPracticePage() {
   }));
 
   const submit = (fu: number) => {
+    if (feedback) return;
     const result = checkFuPracticeAnswer(question, fu);
     setAnswerFu(fu);
     setFeedback(result);
@@ -252,24 +274,33 @@ export function FuPracticePage() {
     setFeedback(null);
   };
 
-  const randomQuestion = () => randomPracticeSeed(setSeed, resetQuestion, FU_PRACTICE_QUESTION_COUNT);
+  const nextQuestion = () => {
+    resetQuestion();
+    practice.nextQuestion();
+  };
+
+  const randomQuestion = () => {
+    resetQuestion();
+    practice.randomQuestion();
+  };
 
   return (
     <div className="mj-page-stack mj-practice-design mj-fu-practice-page">
       <PracticeStats
         items={[
-          { label: '题号', value: `第${seed + 1}题` },
+          { label: '题号', value: `第${practice.ordinal}题` },
           { label: '状态', value: `连对 ${streak}`, tone: streak > 0 ? 'green' : 'default' },
           { label: '场况', value: `${WIND_LABELS[question.roundWind]}场${WIND_LABELS[question.seatWind]}家` },
         ]}
       />
 
       <SectionCard className="mj-practice-hand-card" title="题面手牌">
-        <TileStrip highlightLast tileSize="xs" tiles={question.handTiles.map(tileToCode)} />
+        <PracticeHandScene handGroups={question.handGroups} />
         <div className="mj-practice-hand-meta">
           <Chip selected>{formatWinMethod(question.winMethod)}</Chip>
           <Chip selected>场风{WIND_LABELS[question.roundWind]}</Chip>
           <Chip selected>自风{WIND_LABELS[question.seatWind]}</Chip>
+          {question.visibleConditions.map((condition) => <Chip key={condition} selected>{condition}</Chip>)}
         </div>
       </SectionCard>
 
@@ -290,6 +321,7 @@ export function FuPracticePage() {
                 ]
                   .filter(Boolean)
                   .join(' ')}
+                disabled={Boolean(feedback)}
                 type="button"
                 onClick={() => submit(fu)}
               >
@@ -314,11 +346,16 @@ export function FuPracticePage() {
             rows={rows}
             rowKey={(row) => String(row.id)}
           />
-          <ActionButton fullWidth icon={<BookOpen aria-hidden="true" />} variant="ghost" onClick={() => {
-            window.location.hash = '#/help-fu';
-          }}>
-            符数帮助
-          </ActionButton>
+          <div className="mj-button-row mj-button-row--two">
+            <ActionButton icon={<BookOpen aria-hidden="true" />} variant="ghost" onClick={() => {
+              window.location.hash = '#/help-fu';
+            }}>
+              符数帮助
+            </ActionButton>
+            <ActionButton icon={<Sparkles aria-hidden="true" />} onClick={nextQuestion}>
+              下一题
+            </ActionButton>
+          </div>
         </section>
       ) : null}
       <RandomQuestionButton onClick={randomQuestion} />
@@ -326,20 +363,22 @@ export function FuPracticePage() {
   );
 }
 
-function makePointLookupRows(han: number) {
-  const safeHan = Math.max(1, Math.min(5, han || 1)) as 1 | 2 | 3 | 4 | 5;
-  return [30, 40, 50].map((fu) => {
-    const row = buildHanFuTableRow(safeHan, fu as FuValue);
+function makePointLookupRows(han: number, isDealer: boolean) {
+  const safeHan = Math.max(1, Math.min(13, han || 1)) as HanValue;
+  return getLegalFuOptions(safeHan).map((fu) => {
+    const row = buildHanFuTableRow(safeHan, fu);
     return {
       id: `${safeHan}-${fu}`,
       label: `${safeHan}番${fu}符`,
-      ron: String(row.nonDealer.ron),
-      tsumo: `${row.nonDealer.tsumoNonDealerPays}/${row.nonDealer.tsumoDealerPays}`,
+      ron: String(isDealer ? row.dealer.ron : row.nonDealer.ron),
+      tsumo: isDealer
+        ? `${row.dealer.tsumo} 全`
+        : `${row.nonDealer.tsumoNonDealerPays}/${row.nonDealer.tsumoDealerPays}`,
     };
   });
 }
 
-function isMeldPointGroup(group: PointPracticeHandGroup): boolean {
+function isMeldPracticeGroup(group: PracticeHandGroup): boolean {
   return group.kind === 'chi' || group.kind === 'pon' || group.kind === 'openKan' || group.kind === 'closedKan';
 }
 
@@ -350,7 +389,7 @@ function pointTileOrder(code: string): number {
   return (suitOrder[suit] ?? 9) * 10 + rank;
 }
 
-function PointPracticeTile({
+function PracticeHandTile({
   code,
   back = false,
   sideways = false,
@@ -382,14 +421,14 @@ function PointPracticeTile({
   );
 }
 
-function PointPracticeHandMeld({
+function PracticeHandMeld({
   group,
   groupIndex,
 }: {
-  group: PointPracticeHandGroup;
+  group: PracticeHandGroup;
   groupIndex: number;
 }) {
-  const isOpen = isMeldPointGroup(group);
+  const isOpen = isMeldPracticeGroup(group);
 
   return (
     <div
@@ -406,7 +445,7 @@ function PointPracticeHandMeld({
           const isSideways = tileIndex === group.calledIndex;
           const isBack = group.backIndexes?.includes(tileIndex) ?? false;
           return (
-            <PointPracticeTile
+            <PracticeHandTile
               key={`${groupIndex}-${tile}-${tileIndex}`}
               code={tile}
               back={isBack}
@@ -419,9 +458,9 @@ function PointPracticeHandMeld({
   );
 }
 
-function PointPracticeHandScene({ question }: { question: PointPracticeQuestion }) {
-  const handEntries = question.handGroups
-    .filter((group) => !isMeldPointGroup(group))
+function PracticeHandScene({ handGroups }: { handGroups: readonly PracticeHandGroup[] }) {
+  const handEntries = handGroups
+    .filter((group) => !isMeldPracticeGroup(group))
     .flatMap((group, groupIndex) =>
       group.tiles.map((tile, tileIndex) => ({
         tile,
@@ -436,13 +475,13 @@ function PointPracticeHandScene({ question }: { question: PointPracticeQuestion 
     .filter((entry) => !entry.isWinning)
     .sort((left, right) => pointTileOrder(left.tile) - pointTileOrder(right.tile));
   const floatingWinAnchorIndex = winningEntry ? Math.max(0, handTiles.length - 2) : -1;
-  const meldGroups = question.handGroups.filter(isMeldPointGroup);
+  const meldGroups = handGroups.filter(isMeldPracticeGroup);
 
   return (
     <div className="mj-point-hand-scene" aria-label="题面牌姿">
       <div className="mj-point-hand-scene__hand" aria-label="手牌">
         {handTiles.map(({ tile, groupIndex, tileIndex, isBack }, index) => (
-          <PointPracticeTile
+          <PracticeHandTile
             key={`hand-${groupIndex}-${tile}-${tileIndex}`}
             code={tile}
             back={isBack}
@@ -454,7 +493,7 @@ function PointPracticeHandScene({ question }: { question: PointPracticeQuestion 
       {meldGroups.length > 0 ? (
         <div className="mj-point-hand-scene__melds" aria-label="副露与杠">
           {meldGroups.map((group, index) => (
-            <PointPracticeHandMeld key={`meld-${index}`} group={group} groupIndex={index} />
+            <PracticeHandMeld key={`meld-${index}`} group={group} groupIndex={index} />
           ))}
         </div>
       ) : null}
@@ -463,15 +502,19 @@ function PointPracticeHandScene({ question }: { question: PointPracticeQuestion 
 }
 
 export function PointPracticePage() {
-  const [seed, setSeed] = useState(0);
+  const practice = useGeneratedPracticeQuestion(generatePointPracticeQuestion);
   const [draft, setDraft] = useState('');
   const [feedback, setFeedback] = useState<PracticeFeedback<number> | null>(null);
   const [streak, setStreak] = useState(0);
   const [showLookup, setShowLookup] = useState(true);
-  const question = useMemo(() => generatePointPracticeQuestion(seed), [seed]);
-  const rows = useMemo(() => makePointLookupRows(question.noYaku ? 1 : question.han), [question.han, question.noYaku]);
+  const { question } = practice;
+  const rows = useMemo(
+    () => makePointLookupRows(question.noYaku ? 1 : question.han, question.seatWind === 'east'),
+    [question.han, question.noYaku, question.seatWind],
+  );
 
   const submit = () => {
+    if (feedback) return;
     const result = checkPointPracticeAnswer(question, Number(draft || 0));
     setFeedback(result);
     setStreak((value) => (result.correct ? value + 1 : 0));
@@ -482,24 +525,33 @@ export function PointPracticePage() {
     setFeedback(null);
   };
 
-  const randomQuestion = () => randomPracticeSeed(setSeed, resetQuestion, POINT_PRACTICE_QUESTION_COUNT);
+  const nextQuestion = () => {
+    resetQuestion();
+    practice.nextQuestion();
+  };
+
+  const randomQuestion = () => {
+    resetQuestion();
+    practice.randomQuestion();
+  };
 
   return (
     <div className="mj-page-stack mj-practice-design mj-point-practice-page">
       <PracticeStats
         items={[
-          { label: '题号', value: `第${seed + 1}题` },
+          { label: '题号', value: `第${practice.ordinal}题` },
           { label: '状态', value: `连对 ${streak}`, tone: streak > 0 ? 'green' : 'default' },
           { label: '答案口径', value: '总获得点' },
         ]}
       />
 
       <SectionCard aria-label="题面手牌" className="mj-practice-hand-card mj-point-hand-card">
-        <PointPracticeHandScene question={question} />
+        <PracticeHandScene handGroups={question.handGroups} />
         <div className="mj-practice-hand-meta">
           <Chip selected>{question.seatWind === 'east' ? '亲家' : '闲家'}</Chip>
           <Chip selected>{formatWinMethod(question.winMethod)}</Chip>
           <Chip selected>{WIND_LABELS[question.roundWind]}场{WIND_LABELS[question.seatWind]}家</Chip>
+          {question.visibleConditions.map((condition) => <Chip key={condition} selected>{condition}</Chip>)}
         </div>
       </SectionCard>
 
@@ -510,12 +562,12 @@ export function PointPracticePage() {
           pattern="[0-9]*"
           placeholder="例如 7700"
           value={draft}
+          disabled={Boolean(feedback)}
           onChange={(event) => {
-            setFeedback(null);
             setDraft(event.target.value.replace(/\D/g, ''));
           }}
         />
-        <ActionButton disabled={!draft} fullWidth icon={<Check aria-hidden="true" />} onClick={submit}>
+        <ActionButton disabled={!draft || Boolean(feedback)} fullWidth icon={<Check aria-hidden="true" />} onClick={submit}>
           提交答案
         </ActionButton>
       </SectionCard>
@@ -530,8 +582,8 @@ export function PointPracticePage() {
           <DataTable
             columns={[
               { id: 'label', header: '番符' },
-              { id: 'ron', header: '闲荣' },
-              { id: 'tsumo', header: '闲摸' },
+              { id: 'ron', header: question.seatWind === 'east' ? '庄家荣和' : '闲家荣和' },
+              { id: 'tsumo', header: question.seatWind === 'east' ? '庄家自摸' : '闲家自摸' },
             ]}
             rows={rows}
             rowKey={(row) => String(row.id)}
@@ -554,7 +606,7 @@ export function PointPracticePage() {
               }}>
                 点数帮助
               </ActionButton>
-              <ActionButton icon={<Sparkles aria-hidden="true" />} onClick={() => nextPracticeSeed(setSeed, resetQuestion)}>
+              <ActionButton icon={<Sparkles aria-hidden="true" />} onClick={nextQuestion}>
                 下一题
               </ActionButton>
             </div>
@@ -567,14 +619,15 @@ export function PointPracticePage() {
 }
 
 export function ComebackPracticePage() {
-  const [seed, setSeed] = useState(0);
+  const practice = useGeneratedPracticeQuestion(generateComebackPracticeQuestion);
   const [answers, setAnswers] = useState<Record<number, FuValue | 'impossible'>>({});
   const [feedback, setFeedback] = useState<PracticeFeedback<Record<number, FuValue | 'impossible'>> | null>(null);
   const [streak, setStreak] = useState(0);
-  const question = useMemo(() => generateComebackPracticeQuestion(seed), [seed]);
+  const { question } = practice;
   const isComplete = question.hanTiers.every((han) => answers[han] !== undefined);
 
   const submit = () => {
+    if (feedback) return;
     const result = checkComebackPracticeAnswer(question, answers);
     setFeedback(result);
     setStreak((value) => (result.correct ? value + 1 : 0));
@@ -585,11 +638,18 @@ export function ComebackPracticePage() {
     setFeedback(null);
   };
 
-  const nextQuestion = () => nextPracticeSeed(setSeed, resetQuestion);
-  const randomQuestion = () => randomPracticeSeed(setSeed, resetQuestion, COMEBACK_PRACTICE_QUESTION_COUNT);
+  const nextQuestion = () => {
+    resetQuestion();
+    practice.nextQuestion();
+  };
+
+  const randomQuestion = () => {
+    resetQuestion();
+    practice.randomQuestion();
+  };
 
   const selectAnswer = (han: number, option: FuValue | 'impossible') => {
-    setFeedback(null);
+    if (feedback) return;
     setAnswers((value) => ({ ...value, [han]: option }));
   };
 
@@ -599,7 +659,7 @@ export function ComebackPracticePage() {
         <header className="mj-comeback-sheet__header">
           <div>
             <h2>作答</h2>
-            <span>{streak}连正</span>
+            <span>第{practice.ordinal}题 · {streak}连正</span>
           </div>
         </header>
 
@@ -632,7 +692,7 @@ export function ComebackPracticePage() {
                 </span>
                 {COMEBACK_OPTION_ROWS.flatMap((row) =>
                   row.map((option) => {
-                    const disabled = !isComebackOptionAvailable(han, option);
+                    const disabled = Boolean(feedback) || !isComebackOptionAvailable(han, option);
                     const selectedCell = selected === option;
                     const correctCell = feedback && standard === option;
                     const wrongCell = feedback && selectedCell && selected !== standard;
@@ -674,7 +734,7 @@ export function ComebackPracticePage() {
         ) : null}
 
         <footer className="mj-comeback-sheet__footer">
-          <ActionButton disabled={!isComplete} fullWidth icon={<Check aria-hidden="true" />} onClick={submit}>
+          <ActionButton disabled={!isComplete || Boolean(feedback)} fullWidth icon={<Check aria-hidden="true" />} onClick={submit}>
             确认答案
           </ActionButton>
           <ActionButton fullWidth icon={<Calculator aria-hidden="true" />} variant="ghost" onClick={() => {
