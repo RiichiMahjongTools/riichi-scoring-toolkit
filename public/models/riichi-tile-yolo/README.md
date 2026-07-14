@@ -14,3 +14,7 @@ Export from the training workspace with:
 
 The frontend expects the 37-class label order from `datasets/merged-riichi-37-all/data.yaml`:
 `0m, 0p, 0s, 1m...9s, 1z...7z`.
+
+When replacing the model, recompute its SHA-256 and update the version query in
+`DEFAULT_RECOGNITION_MODEL_URL` so installed PWAs fetch the new model instead of
+reusing the previous runtime cache entry.

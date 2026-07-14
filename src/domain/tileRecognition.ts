@@ -9,7 +9,8 @@ import {
   type TileCode,
 } from './tiles';
 
-export const DEFAULT_RECOGNITION_MODEL_URL = '/models/riichi-tile-yolo/riichi-37-yolo11n-640.onnx';
+export const DEFAULT_RECOGNITION_MODEL_URL =
+  '/models/riichi-tile-yolo/riichi-37-yolo11n-640.onnx?v=bb1b89b7c6ca';
 export const DEFAULT_RECOGNITION_IMAGE_SIZE = 640;
 export const DEFAULT_RECOGNITION_CONFIDENCE = 0.35;
 export const DEFAULT_RECOGNITION_IOU = 0.45;
