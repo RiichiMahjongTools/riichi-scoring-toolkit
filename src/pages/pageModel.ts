@@ -23,7 +23,6 @@ export type PageId =
   | 'legacy-score'
   | 'point-practice'
   | 'yaku-list'
-  | 'yaku-detail'
   | 'comeback'
   | 'table-records'
   | 'han-fu-table'
@@ -98,7 +97,7 @@ export const NAV_ENTRIES: NavEntry[] = [
     id: 'yaku-list',
     group: '资料',
     title: '役种列表',
-    subtitle: '现代标准役与常见役满的条件说明',
+    subtitle: '雀魂完整役种、古役、宝牌说明与流局条件',
     status: 'ready',
     icon: NotebookTabs,
   },
@@ -153,7 +152,6 @@ export const PAGE_TITLES: Record<PageId, string> = {
   'legacy-score': '古役点数计算',
   'point-practice': '点数计算练习',
   'yaku-list': '役种列表',
-  'yaku-detail': '役种详情',
   comeback: '逆转番符练习',
   'table-records': '面麻点数记录',
   'han-fu-table': '番符点数表速查',

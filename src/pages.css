@@ -507,15 +507,26 @@
 
 .mj-yaku-list-page {
   gap: 14px;
+  min-width: 0;
 }
 
 .mj-yaku-filter-row {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 7px;
+  max-width: 100%;
+  padding-bottom: 3px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+
+.mj-yaku-filter-row::-webkit-scrollbar {
+  display: none;
 }
 
 .mj-yaku-filter-row .mj-chip {
+  flex: 0 0 auto;
   min-height: 28px;
   padding: 0 11px;
   font-size: 13px;
@@ -539,56 +550,55 @@
 
 .mj-yaku-list-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  align-items: center;
-  gap: 8px;
-  min-height: 62px;
-  padding: 7px 0;
-  border: 0;
+  gap: 6px;
+  min-width: 0;
+  padding: 11px 0;
   border-bottom: 1px solid var(--mj-line);
-  background: transparent;
-  color: var(--mj-green);
-  text-align: left;
 }
 
 .mj-yaku-list-row:last-child {
   border-bottom: 0;
 }
 
-.mj-yaku-list-row__copy {
-  display: grid;
-  gap: 3px;
+.mj-yaku-list-row__heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px 7px;
   min-width: 0;
 }
 
-.mj-yaku-list-row__copy strong {
+.mj-yaku-list-row__heading h3 {
+  margin: 0;
   color: var(--mj-ink);
   font-size: 15px;
   font-weight: 900;
 }
 
-.mj-yaku-list-row__copy small {
+.mj-yaku-list-row > small {
   color: var(--mj-muted);
   font-size: 12px;
   font-weight: 700;
+  line-height: 1.45;
 }
 
 .mj-yaku-tags {
   display: inline-flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
 }
 
 .mj-yaku-tag {
   display: inline-grid;
   place-items: center;
-  min-height: 24px;
-  padding: 0 8px;
+  min-height: 20px;
+  padding: 0 6px;
   border: 1px solid color-mix(in srgb, var(--mj-green) 35%, var(--mj-line));
   border-radius: 999px;
   background: var(--mj-green-soft);
   color: var(--mj-green);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 900;
   white-space: nowrap;
 }
@@ -601,38 +611,6 @@
   border-color: var(--mj-red);
   background: var(--mj-red);
   color: #fff;
-}
-
-.mj-yaku-arrow {
-  color: var(--mj-muted);
-  font-size: 22px;
-  line-height: 1;
-}
-
-.mj-yaku-detail-hero {
-  display: grid;
-  gap: 10px;
-  padding: 18px;
-  border-radius: 18px;
-  background: var(--mj-green);
-  color: #fff;
-}
-
-.mj-yaku-detail-hero h1,
-.mj-yaku-detail-hero p {
-  margin: 0;
-}
-
-.mj-yaku-detail-hero h1 {
-  font-size: 27px;
-  font-weight: 900;
-  line-height: 1.12;
-}
-
-.mj-yaku-detail-hero p {
-  color: var(--mj-green-soft);
-  font-size: 14px;
-  font-weight: 800;
 }
 
 .mj-detail-block {
@@ -652,19 +630,54 @@
   line-height: 1.55;
 }
 
-.mj-yaku-note-list {
-  display: grid;
-  gap: 8px;
-  margin: 0;
-  padding-left: 18px;
-  color: var(--mj-muted);
-  font-size: 13px;
-  font-weight: 700;
-  line-height: 1.5;
+.mj-yaku-example-scroll {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  padding: 1px 0 2px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
 }
 
-.mj-yaku-note-list li::marker {
-  color: var(--mj-gold);
+.mj-yaku-example-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.mj-yaku-example-scroll:focus-visible {
+  border-radius: 6px;
+  outline: 2px solid var(--mj-green);
+  outline-offset: 2px;
+}
+
+.mj-yaku-example-groups {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: flex-end;
+  gap: 9px;
+  width: max-content;
+}
+
+.mj-yaku-example-group {
+  display: inline-flex;
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+  gap: 2px;
+  width: max-content;
+}
+
+.mj-yaku-example-group .mj-tile {
+  flex: 0 0 auto;
+}
+
+.mj-yaku-example-empty {
+  margin: 0;
+  color: var(--mj-muted);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.5;
 }
 
 .mj-hanfu-calc-page {
@@ -809,17 +822,6 @@
 .mj-legacy-page .mj-score-hero strong {
   font-family: 'Geist Mono', ui-monospace, monospace;
   font-weight: 900;
-}
-
-.mj-yaku-detail-page .mj-detail-block {
-  padding: 0;
-  border: 0;
-  background: transparent;
-}
-
-.mj-yaku-detail-page .mj-detail-block p {
-  color: var(--mj-ink);
-  font-size: 14px;
 }
 
 .mj-two-column {

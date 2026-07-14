@@ -1,86 +1,51 @@
 import { AlertCircle } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 
-import { ActionButton, Alert, Chip, DataTable, SectionCard } from '../components';
-import { FU_HELP_SECTIONS, POINT_HELP_SECTIONS, YAKU_LIST, type HelpSection, type YakuCategory, type YakuInfo } from '../data';
-import type { PageProps } from './shared';
+import { Alert, Chip, DataTable, MahjongTile, SectionCard } from '../components';
+import {
+  FU_HELP_SECTIONS,
+  POINT_HELP_SECTIONS,
+  YAKU_CATEGORY_LABELS,
+  YAKU_CATEGORY_ORDER,
+  YAKU_LIST,
+  type HelpSection,
+  type YakuCategory,
+} from '../data';
 import type { CSSProperties } from 'react';
 
-const CATEGORY_LABELS: Record<YakuCategory | 'all', string> = {
-  all: '全部',
-  'one-han': '1番',
-  'two-han': '2番',
-  'three-han': '3番',
-  'six-han': '6番',
-  yakuman: '役满',
-};
+type YakuFilter = 'all' | YakuCategory;
 
-type YakuFilter = 'all' | 'closed' | 'open' | 'yakuman';
-
-const FILTERS: Array<{ id: YakuFilter; label: string }> = [
+const FILTERS: readonly { id: YakuFilter; label: string }[] = [
   { id: 'all', label: '全部' },
-  { id: 'closed', label: '门前' },
-  { id: 'open', label: '副露可' },
-  { id: 'yakuman', label: '役满' },
+  ...YAKU_CATEGORY_ORDER.map((category) => ({
+    id: category,
+    label: YAKU_CATEGORY_LABELS[category],
+  })),
 ];
 
-function formatYakuHan(value: number | 'yakuman' | 'double-yakuman' | undefined) {
-  if (value === undefined) return '-';
-  if (value === 'yakuman') return '役满';
-  if (value === 'double-yakuman') return '双倍役满';
-  return `${value}番`;
+function yakuNoteTags(note: string) {
+  return note
+    .split(/[，,]/)
+    .map((tag) => tag.trim())
+    .filter(Boolean);
 }
 
-function shortYakuDescription(id: string, fallback: string) {
-  const map: Record<string, string> = {
-    riichi: '宣言听牌并支付供托',
-    'menzen-tsumo': '门前自摸和牌',
-    yakuhai: '三元牌、场风或自风刻子',
-    chiitoitsu: '七组对子，固定25符',
-    chanta: '每组含幺九字牌',
-    'sanshoku-doujun': '三门同数字顺子',
-    kokushi: '十三种幺九字牌',
-    daisangen: '三副三元牌刻子/杠子',
-    suuankou: '四组暗刻',
-  };
-  return map[id] ?? fallback.replace(/[。.]$/, '');
+function yakuCategoryTagClass(category: YakuCategory) {
+  return category === 'yakuman' || category === 'double-yakuman'
+    ? 'mj-yaku-tag mj-yaku-tag--danger'
+    : 'mj-yaku-tag';
 }
 
-function yakuTagText(yaku: YakuInfo) {
-  if (typeof yaku.hanClosed === 'number' && typeof yaku.hanOpen === 'number' && yaku.hanClosed !== yaku.hanOpen) {
-    return `${yaku.hanClosed}番/${yaku.hanOpen}番`;
-  }
-  return formatYakuHan(yaku.hanClosed);
-}
-
-function yakuOpenText(yaku: YakuInfo) {
-  if (yaku.closedOnly) return '门前限定';
-  if (typeof yaku.hanClosed === 'number' && typeof yaku.hanOpen === 'number' && yaku.hanClosed !== yaku.hanOpen) {
-    return '副露减番';
-  }
-  return '副露可';
-}
-
-export function YakuListPage({ navigate: _navigate }: PageProps) {
+export function YakuListPage() {
   const [filter, setFilter] = useState<YakuFilter>('all');
-  const groups = useMemo(() => {
-    const filtered = YAKU_LIST.filter((yaku) => {
-      if (filter === 'closed') return yaku.closedOnly;
-      if (filter === 'open') return !yaku.closedOnly;
-      if (filter === 'yakuman') return yaku.category === 'yakuman';
-      return true;
-    });
-    return (['one-han', 'two-han', 'three-han', 'six-han', 'yakuman'] as YakuCategory[])
-      .map((category) => ({
-        title: CATEGORY_LABELS[category],
-        items: filtered.filter((yaku) => yaku.category === category),
-      }))
-      .filter((group) => group.items.length > 0);
-  }, [filter]);
-
-  const openDetail = (id: string) => {
-    window.location.hash = `#/yaku-detail?id=${encodeURIComponent(id)}`;
-  };
+  const filtered = YAKU_LIST.filter((yaku) => filter === 'all' || yaku.category === filter);
+  const groups = YAKU_CATEGORY_ORDER
+    .map((category) => ({
+      category,
+      title: YAKU_CATEGORY_LABELS[category],
+      items: filtered.filter((yaku) => yaku.category === category),
+    }))
+    .filter((group) => group.items.length > 0);
 
   return (
     <div className="mj-page-stack mj-yaku-list-page">
@@ -93,87 +58,39 @@ export function YakuListPage({ navigate: _navigate }: PageProps) {
       </div>
 
       {groups.map((group) => (
-        <section key={group.title} className="mj-yaku-section-card">
+        <section key={group.category} className="mj-yaku-section-card">
           <h2>{group.title}</h2>
-          {group.items.map((yaku) => {
-            return (
-              <button key={yaku.id} className="mj-yaku-list-row" type="button" onClick={() => openDetail(yaku.id)}>
-                <span className="mj-yaku-list-row__copy">
-                  <strong>{yaku.name}</strong>
-                  <small>{shortYakuDescription(yaku.id, yaku.condition)}</small>
+          {group.items.map((yaku) => (
+            <article key={yaku.id} className="mj-yaku-list-row">
+              <div className="mj-yaku-list-row__heading">
+                <h3>{yaku.name}</h3>
+                <span className="mj-yaku-tags" aria-label={`${yaku.name}标签`}>
+                  <b className={yakuCategoryTagClass(yaku.category)}>{YAKU_CATEGORY_LABELS[yaku.category]}</b>
+                  {yakuNoteTags(yaku.note).map((tag) => (
+                    <b className="mj-yaku-tag mj-yaku-tag--plain" key={tag}>{tag}</b>
+                  ))}
                 </span>
-                <span className="mj-yaku-tags">
-                  <b className={yaku.category === 'yakuman' ? 'mj-yaku-tag mj-yaku-tag--danger' : 'mj-yaku-tag'}>
-                    {yakuTagText(yaku)}
-                  </b>
-                  <b className="mj-yaku-tag mj-yaku-tag--plain">
-                    {yakuOpenText(yaku)}
-                  </b>
-                </span>
-                <span className="mj-yaku-arrow" aria-hidden="true">›</span>
-              </button>
-            );
-          })}
+              </div>
+              <small>{yaku.description}</small>
+              {yaku.exampleGroups.length > 0 ? (
+                <div className="mj-yaku-example-scroll" aria-label={`${yaku.name}牌例，可横向滚动`} tabIndex={0}>
+                  <div aria-label={`${yaku.name}示例牌姿`} className="mj-yaku-example-groups" role="group">
+                    {yaku.exampleGroups.map((exampleGroup, groupIndex) => (
+                      <span className="mj-yaku-example-group" key={`${yaku.id}-group-${groupIndex}`}>
+                        {exampleGroup.map((tile, tileIndex) => (
+                          <MahjongTile code={tile} key={`${yaku.id}-${groupIndex}-${tile}-${tileIndex}`} size="sm" />
+                        ))}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <p className="mj-yaku-example-empty">该流局条件没有固定牌姿示例</p>
+              )}
+            </article>
+          ))}
         </section>
       ))}
-    </div>
-  );
-}
-
-export function YakuDetailPage() {
-  const requestedId = new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('id') ?? 'riichi';
-  const yaku = YAKU_LIST.find((entry) => entry.id === requestedId);
-
-  if (!yaku) {
-    return (
-      <div className="mj-page-stack">
-        <Alert tone="warning" title="没有找到役种">
-          当前资料表为空，请先补充役种数据。
-        </Alert>
-      </div>
-    );
-  }
-
-  return (
-    <div className="mj-page-stack mj-yaku-detail-page">
-      <section className="mj-yaku-detail-hero">
-        <h1>{yaku.name}</h1>
-        <p>{CATEGORY_LABELS[yaku.category]} · {yakuOpenText(yaku)}</p>
-        <div className="mj-chip-row">
-          <Chip tone="warning">{formatYakuHan(yaku.hanClosed)}</Chip>
-          <Chip tone="danger" selected>{yaku.closedOnly ? '门前限定' : '副露可'}</Chip>
-          <Chip>{CATEGORY_LABELS[yaku.category]}</Chip>
-        </div>
-      </section>
-
-      <SectionCard title="示例">
-        <p className="mj-help-example">{yaku.example}</p>
-      </SectionCard>
-
-      <SectionCard title="详细说明">
-        <div className="mj-detail-block">
-          <p>{yaku.condition}</p>
-        </div>
-        <div className="mj-chip-row">
-          {[CATEGORY_LABELS[yaku.category], yakuOpenText(yaku), yakuTagText(yaku)].map((tag) => (
-            <Chip key={tag}>{tag}</Chip>
-          ))}
-        </div>
-      </SectionCard>
-
-      <SectionCard title="补充">
-        <ul className="mj-yaku-note-list">
-          {(yaku.notes?.length ? yaku.notes : ['不同规则集可能有细节差异，实战请以牌桌规则为准。']).map((note) => (
-            <li key={note}>{note}</li>
-          ))}
-        </ul>
-      </SectionCard>
-
-      <ActionButton fullWidth onClick={() => {
-        window.location.hash = '#/yaku-list';
-      }}>
-        ← 返回役种列表
-      </ActionButton>
     </div>
   );
 }

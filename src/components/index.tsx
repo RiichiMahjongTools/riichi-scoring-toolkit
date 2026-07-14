@@ -442,6 +442,18 @@ function parseTileCode(code: string): { suit: TileSuitId; rank: number; isRed: b
 }
 
 export function tileCodeToMeta(code: string): TileMeta {
+  if (code.trim().toLowerCase() === 'back') {
+    return {
+      code,
+      label: '',
+      suitLabel: '',
+      suit: 'unknown',
+      ariaLabel: '牌背',
+      isRed: false,
+      assetFilename: 'Back.png',
+    };
+  }
+
   const parsed = parseTileCode(code);
 
   if (!parsed) {

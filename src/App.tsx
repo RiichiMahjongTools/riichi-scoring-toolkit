@@ -18,7 +18,7 @@ import {
   PointPracticePage,
 } from './pages/PracticePages';
 import { LegacyScorePage, QuickScorePage } from './pages/QuickScorePage';
-import { FuHelpPage, PointHelpPage, YakuDetailPage, YakuListPage } from './pages/YakuHelpPages';
+import { FuHelpPage, PointHelpPage, YakuListPage } from './pages/YakuHelpPages';
 import { PAGE_TITLES, entryForPage, type PageId } from './pages/pageModel';
 import './pages.css';
 
@@ -29,9 +29,14 @@ type ShareStatus = {
 
 const KNOWN_PAGES = new Set<PageId>(Object.keys(PAGE_TITLES) as PageId[]);
 
+function pageNameFromHash() {
+  return window.location.hash.replace(/^#\/?/, '').split(/[?&]/)[0];
+}
+
 function pageFromHash(): PageId {
-  const raw = window.location.hash.replace(/^#\/?/, '').split(/[?&]/)[0];
+  const raw = pageNameFromHash();
   if (!raw) return 'home';
+  if (raw === 'yaku-detail') return 'yaku-list';
   return KNOWN_PAGES.has(raw as PageId) ? (raw as PageId) : 'home';
 }
 
@@ -54,6 +59,9 @@ export default function App() {
 
   useEffect(() => {
     const syncPage = () => {
+      if (pageNameFromHash() === 'yaku-detail') {
+        window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#/yaku-list`);
+      }
       const nextPage = pageFromHash();
       setPage(nextPage);
       if (nextPage === 'home' && window.location.hash && !window.location.hash.startsWith('#/home')) {
@@ -143,9 +151,7 @@ function renderPage(page: PageId, navigate: (page: PageId) => void) {
     case 'han-fu-table':
       return <HanFuTablePage />;
     case 'yaku-list':
-      return <YakuListPage navigate={navigate} />;
-    case 'yaku-detail':
-      return <YakuDetailPage />;
+      return <YakuListPage />;
     case 'help-fu':
       return <FuHelpPage />;
     case 'help-points':
