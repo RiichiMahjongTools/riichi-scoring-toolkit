@@ -1,6 +1,14 @@
-import { defineConfig } from 'vitest/config';
+/// <reference types="vitest/config" />
+
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import { storybookTest } from '@storybook/addon-vitest/vitest-plugin';
 import react from '@vitejs/plugin-react';
+import { defineConfig } from 'vitest/config';
 import { VitePWA } from 'vite-plugin-pwa';
+
+const dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   plugins: [
@@ -42,15 +50,15 @@ export default defineConfig({
       workbox: {
         clientsClaim: true,
         skipWaiting: false,
-      cleanupOutdatedCaches: true,
-      navigateFallback: 'index.html',
-      globPatterns: ['**/*.{js,css,html,ico,png,svg,webmanifest}'],
-      globIgnores: [
-        '**/pwa-*.png',
-        '**/maskable-icon-*.png',
-        '**/manifest.webmanifest',
-      ],
-      runtimeCaching: [
+        cleanupOutdatedCaches: true,
+        navigateFallback: 'index.html',
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,webmanifest}'],
+        globIgnores: [
+          '**/pwa-*.png',
+          '**/maskable-icon-*.png',
+          '**/manifest.webmanifest',
+        ],
+        runtimeCaching: [
           {
             urlPattern: /\/models\/.*\.onnx(?:\?.*)?$/,
             handler: 'CacheFirst',
@@ -88,7 +96,32 @@ export default defineConfig({
     sourcemap: true,
   },
   test: {
-    exclude: ['node_modules/**', 'dist/**', '.tmp/**'],
-    include: ['src/**/*.{test,spec}.{ts,tsx}'],
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: 'unit',
+          exclude: ['node_modules/**', 'dist/**', '.tmp/**'],
+          include: ['src/**/*.{test,spec}.{ts,tsx}'],
+        },
+      },
+      {
+        extends: true,
+        plugins: [
+          storybookTest({
+            configDir: path.join(dirname, '.storybook'),
+          }),
+        ],
+        test: {
+          name: 'storybook',
+          browser: {
+            enabled: true,
+            headless: true,
+            provider: 'playwright',
+            instances: [{ browser: 'chromium' }],
+          },
+        },
+      },
+    ],
   },
 });

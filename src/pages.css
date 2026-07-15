@@ -167,47 +167,6 @@
   gap: 12px;
 }
 
-.mj-design-card {
-  display: grid;
-  gap: 12px;
-  padding: 14px;
-  border: 1px solid var(--mj-line);
-  border-radius: var(--mj-radius);
-  background: var(--mj-surface);
-  box-shadow: var(--mj-shadow);
-}
-
-.mj-quick-page .mj-design-card {
-  gap: 9px;
-  padding: 13px 14px;
-}
-
-.mj-quick-page .mj-design-card__header h2 {
-  font-size: 17px;
-}
-
-.mj-design-card__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.mj-design-card__header h2 {
-  margin: 0;
-  color: var(--mj-ink);
-  font-size: 18px;
-  font-weight: 900;
-  line-height: 1.25;
-}
-
-.mj-design-card__header span {
-  color: var(--mj-muted);
-  font-family: 'Geist Mono', ui-monospace, monospace;
-  font-size: 13px;
-  font-weight: 800;
-}
-
 .mj-quick-tile-row {
   display: flex;
   align-items: center;
@@ -218,7 +177,7 @@
   scrollbar-width: none;
 }
 
-.mj-quick-hand-card {
+.mj-quick-hand-card .mj-section-card__body {
   gap: 8px;
 }
 
@@ -251,26 +210,18 @@
   display: none;
 }
 
-.mj-quick-hand-actions,
-.mj-quick-actions-bottom {
+.mj-quick-hand-actions {
   display: grid;
   grid-template-columns: 1fr 1fr 1.14fr;
   gap: 8px;
 }
 
-.mj-quick-hand-actions .mj-action-button,
-.mj-quick-actions-bottom .mj-action-button {
+.mj-quick-hand-actions .mj-action-button {
   min-height: 46px;
   gap: 5px;
   padding: 0 8px;
   border-radius: 10px;
   font-size: 12px;
-}
-
-.mj-quick-white-action {
-  border-color: var(--mj-line);
-  background: var(--mj-surface);
-  color: var(--mj-green);
 }
 
 .mj-quick-scan-entry {
@@ -344,73 +295,6 @@
   min-width: 0;
 }
 
-.mj-rule-pill {
-  display: inline-grid;
-  place-items: center;
-  min-width: 38px;
-  min-height: 30px;
-  padding: 0 10px;
-  border: 1px solid var(--mj-line);
-  border-radius: 999px;
-  background: var(--mj-surface);
-  color: var(--mj-green);
-  font-size: 13px;
-  font-weight: 900;
-}
-
-.mj-rule-pill:disabled {
-  cursor: not-allowed;
-  opacity: 0.45;
-}
-
-.mj-rule-pill--selected {
-  border-color: var(--mj-green);
-  background: var(--mj-green);
-  color: #fff;
-}
-
-.mj-honba-stepper {
-  display: grid;
-  grid-template-columns: 30px 34px 30px auto;
-  align-items: center;
-  gap: 5px;
-  color: var(--mj-green);
-  font-size: 13px;
-  font-weight: 900;
-}
-
-.mj-honba-stepper button {
-  display: inline-grid;
-  place-items: center;
-  width: 30px;
-  height: 30px;
-  border: 1px solid var(--mj-line);
-  border-radius: 10px;
-  background: var(--mj-surface);
-  color: var(--mj-green);
-}
-
-.mj-honba-stepper button:disabled {
-  color: var(--mj-muted);
-  background: color-mix(in srgb, var(--mj-soft) 70%, var(--mj-surface));
-}
-
-.mj-honba-stepper svg {
-  width: 16px;
-  height: 16px;
-  stroke-width: 3;
-}
-
-.mj-honba-stepper strong {
-  display: inline-grid;
-  place-items: center;
-  min-width: 34px;
-  height: 30px;
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--mj-soft) 70%, var(--mj-surface));
-  color: var(--mj-ink);
-  font-family: 'Geist Mono', ui-monospace, monospace;
-}
 
 .mj-quick-extra-layout {
   display: grid;
@@ -682,82 +566,6 @@
 
 .mj-hanfu-calc-page {
   gap: 10px;
-}
-
-.mj-hanfu-selector-compact {
-  display: grid;
-  gap: 8px;
-}
-
-.mj-hanfu-selector-compact .mj-chip-row {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 7px;
-}
-
-.mj-hanfu-selector-compact .mj-chip {
-  min-height: 32px;
-  padding: 0 8px;
-  border-color: var(--mj-green);
-}
-
-.mj-hanfu-result-stack {
-  display: grid;
-  gap: 10px;
-}
-
-.mj-hanfu-result-card {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  min-height: 94px;
-  padding: 17px 14px;
-  border: 2px solid var(--mj-green);
-  border-radius: 16px;
-  background: var(--mj-surface);
-}
-
-.mj-hanfu-result-card span {
-  display: grid;
-  gap: 4px;
-  min-width: 0;
-}
-
-.mj-hanfu-result-card strong {
-  color: var(--mj-muted);
-  font-size: 14px;
-  font-weight: 900;
-}
-
-.mj-hanfu-result-card small {
-  color: var(--mj-muted);
-  font-size: 13px;
-  font-weight: 800;
-}
-
-.mj-hanfu-result-card b {
-  color: var(--mj-green);
-  font-family: 'Geist Mono', ui-monospace, monospace;
-  font-size: 24px;
-  font-weight: 900;
-  letter-spacing: 0;
-  white-space: nowrap;
-}
-
-.mj-hanfu-result-card--red {
-  border-color: var(--mj-red);
-}
-
-.mj-hanfu-result-card--red b {
-  color: var(--mj-red);
-}
-
-.mj-hanfu-result-card--gold {
-  border-color: var(--mj-gold);
-}
-
-.mj-hanfu-result-card--gold b {
-  color: var(--mj-gold);
 }
 
 .mj-hanfu-table-page .mj-segmented-control {

@@ -4,8 +4,9 @@ import { useMemo, useState } from 'react';
 import {
   ActionButton,
   Alert,
-  Chip,
   DataTable,
+  HanFuSelector,
+  PaymentCards,
   SectionCard,
   SegmentedControl,
 } from '../components';
@@ -28,6 +29,9 @@ type TableRow = Record<string, unknown> & {
   childTsumo: string;
   limit: string;
 };
+
+const CALCULATOR_HAN_OPTIONS: HanValue[] = [1, 2, 3, 4, 5];
+const CALCULATOR_FU_OPTIONS: FuValue[] = [20, 25, 30, 40, 50];
 
 function clampHan(value: number): HanValue {
   return Math.max(1, Math.min(13, value)) as HanValue;
@@ -95,70 +99,63 @@ export function HanFuCalculatorPage() {
     }),
     [fu, han],
   );
+  const legalFuOptions = getLegalFuOptions(han);
+  const disabledFuValues = CALCULATOR_FU_OPTIONS.filter((value) => !legalFuOptions.includes(value));
+  const resultMeta = `${han}番${fu}符`;
+  const paymentItems = [
+    {
+      id: 'dealer-tsumo',
+      label: '亲家自摸',
+      caption: resultMeta,
+      value: `${results.dealerTsumo.cost.main} all`,
+      tone: 'success' as const,
+    },
+    {
+      id: 'dealer-ron',
+      label: '亲家荣和',
+      caption: resultMeta,
+      value: String(results.dealerRon.cost.main),
+      tone: 'danger' as const,
+    },
+    {
+      id: 'child-tsumo',
+      label: '闲家自摸',
+      caption: resultMeta,
+      value: `${results.childTsumo.cost.additional} / ${results.childTsumo.cost.main}`,
+      tone: 'warning' as const,
+    },
+    {
+      id: 'child-ron',
+      label: '闲家荣和',
+      caption: resultMeta,
+      value: String(results.childRon.cost.main),
+      tone: 'success' as const,
+    },
+  ];
+
+  const selectHan = (value: number) => {
+    const safeHan = clampHan(value);
+    setHan(safeHan);
+    if (!getLegalFuOptions(safeHan).includes(fu)) setFu(firstLegalFu(safeHan));
+  };
 
   return (
     <div className="mj-page-stack mj-hanfu-calc-page">
       <SectionCard title="选择番数与符数">
-        <div className="mj-hanfu-selector-compact">
-          <div className="mj-chip-row">
-            {([1, 2, 3, 4, 5] as HanValue[]).map((value) => (
-              <Chip
-                key={value}
-                selected={han === value}
-                onClick={() => {
-                  const safeHan = clampHan(value);
-                  setHan(safeHan);
-                  if (!getLegalFuOptions(safeHan).includes(fu)) setFu(firstLegalFu(safeHan));
-                }}
-              >
-                {value}番
-              </Chip>
-            ))}
-          </div>
-          <div className="mj-chip-row">
-            {([20, 25, 30, 40, 50] as FuValue[]).map((value) => (
-              <Chip key={value} selected={fu === value} disabled={!getLegalFuOptions(han).includes(value)} onClick={() => setFu(value)}>
-                {value}符
-              </Chip>
-            ))}
-          </div>
-        </div>
+        <HanFuSelector
+          disabledFuValues={disabledFuValues}
+          fu={fu}
+          fuOptions={CALCULATOR_FU_OPTIONS}
+          han={han}
+          hanOptions={CALCULATOR_HAN_OPTIONS}
+          title={null}
+          onFuChange={(value) => setFu(value as FuValue)}
+          onHanChange={selectHan}
+        />
       </SectionCard>
 
-      <div className="mj-hanfu-result-stack">
-        <HanFuResultCard label="亲家自摸" meta={`${han}番${fu}符`} value={`${results.dealerTsumo.cost.main} all`} tone="green" />
-        <HanFuResultCard label="亲家荣和" meta={`${han}番${fu}符`} value={String(results.dealerRon.cost.main)} tone="red" />
-        <HanFuResultCard
-          label="闲家自摸"
-          meta={`${han}番${fu}符`}
-          value={`${results.childTsumo.cost.additional} / ${results.childTsumo.cost.main}`}
-          tone="gold"
-        />
-        <HanFuResultCard label="闲家荣和" meta={`${han}番${fu}符`} value={String(results.childRon.cost.main)} tone="green" />
-      </div>
+      <PaymentCards items={paymentItems} />
     </div>
-  );
-}
-
-function HanFuResultCard({
-  label,
-  meta,
-  value,
-  tone,
-}: {
-  label: string;
-  meta: string;
-  value: string;
-  tone: 'green' | 'red' | 'gold';
-}) {
-  return (
-    <section className={`mj-hanfu-result-card mj-hanfu-result-card--${tone}`}>
-      <span>
-        <strong>{label}</strong>
-        <small>{meta}</small>
-      </span>
-      <b>{value}</b>
-    </section>
   );
 }
 

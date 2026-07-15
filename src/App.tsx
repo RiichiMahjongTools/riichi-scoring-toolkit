@@ -1,31 +1,7 @@
-import { HelpCircle, Share2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import { Alert, AppFrame, TopNav } from './components';
-import {
-  DesignedPlaceholderPage,
-  HandRecognitionPage,
-  TableRecordsPage,
-  TileKeyboardDemoPage,
-} from './pages/DeferredPages';
-import { ContactPage } from './pages/PlaceholderContactPages';
-import { HomePage } from './pages/HomePage';
-import { HanFuCalculatorPage, HanFuTablePage } from './pages/PointPages';
-import {
-  ChinitsuPracticePage,
-  ComebackPracticePage,
-  FuPracticePage,
-  PointPracticePage,
-} from './pages/PracticePages';
-import { LegacyScorePage, QuickScorePage } from './pages/QuickScorePage';
-import { FuHelpPage, PointHelpPage, YakuListPage } from './pages/YakuHelpPages';
-import { PAGE_TITLES, entryForPage, type PageId } from './pages/pageModel';
-import './pages.css';
-
-type ShareStatus = {
-  tone: 'success' | 'warning';
-  message: string;
-} | null;
+import { AppScreen, type AppShareStatus } from './AppScreen';
+import { PAGE_TITLES, type PageId } from './pages/pageModel';
 
 const KNOWN_PAGES = new Set<PageId>(Object.keys(PAGE_TITLES) as PageId[]);
 
@@ -55,7 +31,7 @@ async function copyText(text: string) {
 
 export default function App() {
   const [page, setPage] = useState<PageId>(() => pageFromHash());
-  const [shareStatus, setShareStatus] = useState<ShareStatus>(null);
+  const [shareStatus, setShareStatus] = useState<AppShareStatus>(null);
 
   useEffect(() => {
     const syncPage = () => {
@@ -94,7 +70,6 @@ export default function App() {
     [page],
   );
 
-  const entry = entryForPage(page);
   const shareCurrentPage = async () => {
     const share = (navigator as Navigator & { share?: (payload: ShareData) => Promise<void> }).share;
     if (share) {
@@ -113,70 +88,11 @@ export default function App() {
   };
 
   return (
-    <AppFrame
-      nav={
-        <TopNav
-          subtitle={entry?.subtitle}
-          title={PAGE_TITLES[page]}
-          onBack={page === 'home' ? undefined : () => navigate('home')}
-          actions={[
-            {
-              label: '帮助',
-              icon: <HelpCircle aria-hidden="true" />,
-              onClick: () => navigate(page === 'help-fu' ? 'help-points' : 'help-fu'),
-            },
-            {
-              label: '分享',
-              icon: <Share2 aria-hidden="true" />,
-              onClick: () => void shareCurrentPage(),
-            },
-          ]}
-        />
-      }
-    >
-      {shareStatus ? <Alert className="mj-app-toast" tone={shareStatus.tone}>{shareStatus.message}</Alert> : null}
-      {renderPage(page, navigate)}
-    </AppFrame>
+    <AppScreen
+      page={page}
+      shareStatus={shareStatus}
+      onNavigate={navigate}
+      onShare={shareCurrentPage}
+    />
   );
-}
-
-function renderPage(page: PageId, navigate: (page: PageId) => void) {
-  switch (page) {
-    case 'home':
-      return <HomePage navigate={navigate} />;
-    case 'quick-score':
-      return <QuickScorePage />;
-    case 'han-fu-calculator':
-      return <HanFuCalculatorPage />;
-    case 'han-fu-table':
-      return <HanFuTablePage />;
-    case 'yaku-list':
-      return <YakuListPage />;
-    case 'help-fu':
-      return <FuHelpPage />;
-    case 'help-points':
-      return <PointHelpPage />;
-    case 'chinitsu':
-      return <ChinitsuPracticePage />;
-    case 'fu-practice':
-      return <FuPracticePage />;
-    case 'point-practice':
-      return <PointPracticePage />;
-    case 'comeback':
-      return <ComebackPracticePage />;
-    case 'contact':
-      return <ContactPage />;
-    case 'legacy-score':
-      return <LegacyScorePage />;
-    case 'table-records':
-      return <TableRecordsPage />;
-    case 'hand-recognition':
-      return <HandRecognitionPage />;
-    case 'tile-keyboard-demo':
-      return <TileKeyboardDemoPage />;
-    case 'placeholder':
-      return <DesignedPlaceholderPage navigate={navigate} />;
-    default:
-      return <DesignedPlaceholderPage navigate={navigate} />;
-  }
 }

@@ -118,6 +118,7 @@ export interface SectionCardProps extends Omit<HTMLAttributes<HTMLElement>, 'tit
   actions?: ReactNode;
   footer?: ReactNode;
   tone?: Tone;
+  density?: 'default' | 'compact';
 }
 
 export function SectionCard({
@@ -127,12 +128,16 @@ export function SectionCard({
   actions,
   footer,
   tone = 'default',
+  density = 'default',
   children,
   className,
   ...props
 }: SectionCardProps) {
   return (
-    <section className={cx('mj-section-card', `mj-section-card--${tone}`, className)} {...props}>
+    <section
+      className={cx('mj-section-card', `mj-section-card--${tone}`, `mj-section-card--${density}`, className)}
+      {...props}
+    >
       {(eyebrow || title || description || actions) ? (
         <div className="mj-section-card__header">
           <div className="mj-section-card__heading">
@@ -216,11 +221,13 @@ export function IconButton({
 export interface ChipProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   selected?: boolean;
   tone?: Tone;
+  size?: ButtonSize;
 }
 
 export function Chip({
   selected = false,
   tone = 'default',
+  size = 'md',
   className,
   children,
   type = 'button',
@@ -229,7 +236,13 @@ export function Chip({
   return (
     <button
       aria-pressed={selected}
-      className={cx('mj-chip', `mj-chip--${tone}`, selected && 'mj-chip--selected', className)}
+      className={cx(
+        'mj-chip',
+        `mj-chip--${tone}`,
+        `mj-chip--${size}`,
+        selected && 'mj-chip--selected',
+        className,
+      )}
       type={type}
       {...props}
     >
@@ -282,9 +295,7 @@ export function SegmentedControl<T extends string | number = string>({
   );
 }
 
-export interface CounterControlProps extends Omit<HTMLAttributes<HTMLDivElement>, 'onChange'> {
-  label: ReactNode;
-  ariaLabel?: string;
+interface CounterControlBaseProps extends Omit<HTMLAttributes<HTMLDivElement>, 'onChange'> {
   value: number;
   onChange: (value: number) => void;
   min?: number;
@@ -293,6 +304,11 @@ export interface CounterControlProps extends Omit<HTMLAttributes<HTMLDivElement>
   suffix?: ReactNode;
   disabled?: boolean;
 }
+
+export type CounterControlProps = CounterControlBaseProps & (
+  | { label: ReactNode; ariaLabel?: string }
+  | { label?: never; ariaLabel: string }
+);
 
 export function CounterControl({
   label,
@@ -309,33 +325,39 @@ export function CounterControl({
 }: CounterControlProps) {
   const canDecrease = !disabled && value - step >= min;
   const canIncrease = !disabled && (max === undefined || value + step <= max);
+  const hasVisibleLabel = label !== undefined && label !== null;
   const controlLabel =
     ariaLabel ?? (typeof label === 'string' || typeof label === 'number' ? String(label) : '计数器');
 
   return (
-    <div className={cx('mj-counter', className)} {...props}>
-      <span className="mj-counter__label">{label}</span>
+    <div
+      aria-label={hasVisibleLabel ? undefined : controlLabel}
+      className={cx('mj-counter', !hasVisibleLabel && 'mj-counter--label-hidden', className)}
+      role="group"
+      {...props}
+    >
+      {hasVisibleLabel ? <span className="mj-counter__label">{label}</span> : null}
       <div className="mj-counter__controls">
         <IconButton
           ariaLabel={`减少${controlLabel}`}
+          className="mj-counter__button"
           disabled={!canDecrease}
           icon={<Minus aria-hidden="true" />}
           onClick={() => onChange(value - step)}
           size="sm"
           variant="surface"
         />
-        <output className="mj-counter__value">
-          {value}
-          {suffix ? <span>{suffix}</span> : null}
-        </output>
+        <output aria-live="polite" className="mj-counter__value">{value}</output>
         <IconButton
           ariaLabel={`增加${controlLabel}`}
+          className="mj-counter__button"
           disabled={!canIncrease}
           icon={<Plus aria-hidden="true" />}
           onClick={() => onChange(value + step)}
           size="sm"
           variant="surface"
         />
+        {suffix ? <span className="mj-counter__suffix">{suffix}</span> : null}
       </div>
     </div>
   );
@@ -925,21 +947,23 @@ export function HanFuSelector({
       {title ? <h3>{title}</h3> : null}
       <div className="mj-han-fu-selector__group">
         <span>番数</span>
-        <SegmentedControl
-          ariaLabel="选择番数"
-          options={hanOptions.map((value) => ({ value, label: `${value}番` }))}
-          value={han}
-          onChange={onHanChange}
-        />
+        <div aria-label="选择番数" className="mj-han-fu-selector__options" role="group">
+          {hanOptions.map((value) => (
+            <Chip key={value} selected={value === han} size="sm" onClick={() => onHanChange(value)}>
+              {value}番
+            </Chip>
+          ))}
+        </div>
       </div>
       <div className="mj-han-fu-selector__group">
         <span>符数</span>
-        <div className="mj-chip-grid">
+        <div aria-label="选择符数" className="mj-han-fu-selector__options" role="group">
           {fuOptions.map((value) => (
             <Chip
               key={value}
               disabled={disabledFuValues.includes(value)}
               selected={value === fu}
+              size="sm"
               onClick={() => onFuChange(value)}
             >
               {value}符
@@ -968,9 +992,11 @@ export function MetricStatCard({
 }: MetricStatCardProps) {
   return (
     <div className={cx('mj-metric-card', `mj-metric-card--${tone}`, className)} {...props}>
-      <span>{label}</span>
-      <strong>{value}</strong>
-      {caption ? <small>{caption}</small> : null}
+      <span className="mj-metric-card__copy">
+        <strong>{label}</strong>
+        {caption ? <small>{caption}</small> : null}
+      </span>
+      <b className="mj-metric-card__value">{value}</b>
     </div>
   );
 }
@@ -1290,20 +1316,29 @@ export interface ShareAction {
 export interface ShareBarProps extends HTMLAttributes<HTMLDivElement> {
   actions: ShareAction[];
   label?: ReactNode;
+  appearance?: 'panel' | 'plain';
+  size?: ButtonSize;
 }
 
-export function ShareBar({ actions, label = '分享与保存', className, ...props }: ShareBarProps) {
+export function ShareBar({
+  actions,
+  label = '分享与保存',
+  appearance = 'panel',
+  size = 'sm',
+  className,
+  ...props
+}: ShareBarProps) {
   return (
-    <div className={cx('mj-share-bar', className)} {...props}>
+    <div className={cx('mj-share-bar', `mj-share-bar--${appearance}`, className)} {...props}>
       {label ? <span className="mj-share-bar__label">{label}</span> : null}
-      <div className="mj-share-bar__actions">
+      <div className="mj-share-bar__actions" data-action-count={actions.length}>
         {actions.map((action) => (
           <ActionButton
             key={action.id}
             aria-label={action.ariaLabel}
             disabled={action.disabled}
             icon={action.icon ?? defaultShareIcon(action.id)}
-            size="sm"
+            size={size}
             variant={action.variant ?? 'secondary'}
             onClick={action.onClick}
           >

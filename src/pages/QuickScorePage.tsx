@@ -1,12 +1,15 @@
-import { AlertCircle, Camera, Copy, Minus, Plus, RotateCcw, Share2, SlidersHorizontal, Sparkles, Trash2 } from 'lucide-react';
+import { AlertCircle, Camera, Copy, Plus, RotateCcw, Share2, SlidersHorizontal, Sparkles, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
 import {
   ActionButton,
   Alert,
   Chip,
+  CounterControl,
   MahjongTile,
+  SectionCard,
   SegmentedControl,
+  ShareBar,
   TileKeyboard,
   TileStrip,
 } from '../components';
@@ -326,16 +329,40 @@ function ScoreCalculatorPage({ variant }: { variant: ScorePageVariant }) {
   const resultText = makeResultText(computation);
   const noYakuWarnings = computation.kind === 'score' && !computation.result.valid ? computation.result.warnings : [];
   const invalidErrors = computation.kind === 'invalid' ? computation.errors : [];
+  const quickActions = [
+    {
+      id: 'reset',
+      label: '清空',
+      icon: <RotateCcw aria-hidden="true" />,
+      variant: 'ghost' as const,
+      onClick: reset,
+    },
+    {
+      id: 'modify',
+      label: '修改',
+      icon: <SlidersHorizontal aria-hidden="true" />,
+      variant: 'ghost' as const,
+      onClick: () => setKeyboardTarget('hand'),
+    },
+    {
+      id: 'share-result',
+      label: '分享结果',
+      icon: <Share2 aria-hidden="true" />,
+      disabled: !resultText,
+      onClick: () => void copyResult(resultText, setCopyMessage),
+    },
+  ];
 
   return (
     <div className={isLegacy ? 'mj-page-stack mj-quick-page mj-legacy-page' : 'mj-page-stack mj-quick-page'}>
       <QuickScorePanel computation={computation} seatWind={seatWind} />
 
-      <section className="mj-design-card mj-quick-hand-card">
-        <header className="mj-design-card__header">
-          <h2>手牌与副露</h2>
-          <span>和牌张/最后摸切张 {handTiles.length}/{expectedClosedTiles}</span>
-        </header>
+      <SectionCard
+        actions={<span>和牌张/最后摸切张 {handTiles.length}/{expectedClosedTiles}</span>}
+        className="mj-quick-hand-card"
+        density="compact"
+        title="手牌与副露"
+      >
         <div className="mj-quick-tile-row" aria-label="当前手牌与和牌张/最后摸切张">
           {handTiles.length > 0 ? (
             handTiles.map((tile, index) => {
@@ -383,7 +410,7 @@ function ScoreCalculatorPage({ variant }: { variant: ScorePageVariant }) {
           <ActionButton icon={<Plus aria-hidden="true" />} onClick={() => setKeyboardTarget('hand')}>
             手牌
           </ActionButton>
-          <ActionButton className="mj-quick-white-action" icon={<Copy aria-hidden="true" />} variant="ghost" onClick={() => setKeyboardTarget('meld')}>
+          <ActionButton icon={<Copy aria-hidden="true" />} variant="ghost" onClick={() => setKeyboardTarget('meld')}>
             副露
           </ActionButton>
           <ActionButton icon={<Sparkles aria-hidden="true" />} variant="gold" onClick={() => setKeyboardTarget('dora')}>
@@ -438,7 +465,7 @@ function ScoreCalculatorPage({ variant }: { variant: ScorePageVariant }) {
             </ActionButton>
           </div>
         ) : null}
-      </section>
+      </SectionCard>
 
       <div className="mj-quick-scan-entry">
         <ActionButton
@@ -452,58 +479,54 @@ function ScoreCalculatorPage({ variant }: { variant: ScorePageVariant }) {
         </ActionButton>
       </div>
 
-      <section className="mj-design-card">
-        <header className="mj-design-card__header">
-          <h2>场况与规则</h2>
-        </header>
+      <SectionCard density="compact" title="场况与规则">
         <RuleRow label="四麻 / 三麻">
-          <Pill selected={mode === 'yonma'} onClick={() => selectMode('yonma')}>四麻</Pill>
-          <Pill selected={mode === 'sanma'} onClick={() => selectMode('sanma')}>三麻</Pill>
+          <Chip selected={mode === 'yonma'} size="sm" onClick={() => selectMode('yonma')}>四麻</Chip>
+          <Chip selected={mode === 'sanma'} size="sm" onClick={() => selectMode('sanma')}>三麻</Chip>
         </RuleRow>
         <RuleRow label="场风">
           {WIND_OPTIONS.map((option) => (
-            <Pill key={option.value} selected={roundWind === option.value} onClick={() => setRoundWind(option.value)}>
+            <Chip key={option.value} selected={roundWind === option.value} size="sm" onClick={() => setRoundWind(option.value)}>
               {option.label}
-            </Pill>
+            </Chip>
           ))}
         </RuleRow>
         <RuleRow label="自风">
           {WIND_OPTIONS.map((option) => (
-            <Pill key={option.value} selected={seatWind === option.value} onClick={() => setSeatWind(option.value)}>
+            <Chip key={option.value} selected={seatWind === option.value} size="sm" onClick={() => setSeatWind(option.value)}>
               {option.label}
-            </Pill>
+            </Chip>
           ))}
         </RuleRow>
         {mode === 'sanma' ? (
           <RuleRow label="三麻拔北">
             {NORTH_DORA_OPTIONS.map((value) => (
-              <Pill
+              <Chip
                 key={value}
                 selected={northDoraCount === value}
+                size="sm"
                 onClick={() => setNorthDoraCount(value)}
               >
                 {value}
-              </Pill>
+              </Chip>
             ))}
           </RuleRow>
         ) : null}
         <RuleRow label="本场">
-          <HonbaStepper
+          <CounterControl
+            ariaLabel="本场数"
+            suffix="本场"
             value={honba}
-            onDecrement={() => setHonba((value) => Math.max(0, value - 1))}
-            onIncrement={() => setHonba((value) => value + 1)}
+            onChange={setHonba}
           />
         </RuleRow>
         <RuleRow label="连风雀头">
-          <Pill selected={!doubleWindPairTwoFu} onClick={() => setDoubleWindPairTwoFu(false)}>4符</Pill>
-          <Pill selected={doubleWindPairTwoFu} onClick={() => setDoubleWindPairTwoFu(true)}>2符</Pill>
+          <Chip selected={!doubleWindPairTwoFu} size="sm" onClick={() => setDoubleWindPairTwoFu(false)}>4符</Chip>
+          <Chip selected={doubleWindPairTwoFu} size="sm" onClick={() => setDoubleWindPairTwoFu(true)}>2符</Chip>
         </RuleRow>
-      </section>
+      </SectionCard>
 
-      <section className="mj-design-card">
-        <header className="mj-design-card__header">
-          <h2>额外役与修正</h2>
-        </header>
+      <SectionCard density="compact" title="额外役与修正">
         <div className="mj-quick-extra-layout">
           <div className="mj-quick-chip-grid">
             {EXTRA_OPTIONS.map((option) => (
@@ -536,7 +559,7 @@ function ScoreCalculatorPage({ variant }: { variant: ScorePageVariant }) {
             ))}
           </div>
         </div>
-      </section>
+      </SectionCard>
 
       {noYakuWarnings.length > 0 ? (
         <Alert icon={<AlertCircle aria-hidden="true" />} tone="danger" title="不能计分">
@@ -558,26 +581,7 @@ function ScoreCalculatorPage({ variant }: { variant: ScorePageVariant }) {
 
       <QuickEfficiencyPanel computation={computation} />
 
-      <div className="mj-quick-actions-bottom">
-        <ActionButton icon={<RotateCcw aria-hidden="true" />} variant="ghost" onClick={reset}>
-          清空
-        </ActionButton>
-        <ActionButton className="mj-quick-white-action" icon={<SlidersHorizontal aria-hidden="true" />} variant="ghost" onClick={() => setKeyboardTarget('hand')}>
-          修改
-        </ActionButton>
-        <ActionButton
-          disabled={!resultText}
-          icon={<Share2 aria-hidden="true" />}
-          onClick={() =>
-            void copyResult(
-              resultText,
-              setCopyMessage,
-            )
-          }
-        >
-          分享结果
-        </ActionButton>
-      </div>
+      <ShareBar actions={quickActions} appearance="plain" label={null} size="md" />
 
       {copyMessage ? <Alert tone="success">{copyMessage}</Alert> : null}
 
@@ -619,53 +623,6 @@ function RuleRow({ label, children }: { label: string; children: React.ReactNode
       <span>{label}</span>
       <div className="mj-rule-row__controls">{children}</div>
     </div>
-  );
-}
-
-function HonbaStepper({
-  value,
-  onDecrement,
-  onIncrement,
-}: {
-  value: number;
-  onDecrement: () => void;
-  onIncrement: () => void;
-}) {
-  return (
-    <div className="mj-honba-stepper" aria-label="本场数">
-      <button aria-label="减少本场" disabled={value <= 0} type="button" onClick={onDecrement}>
-        <Minus aria-hidden="true" />
-      </button>
-      <strong>{value}</strong>
-      <button aria-label="增加本场" type="button" onClick={onIncrement}>
-        <Plus aria-hidden="true" />
-      </button>
-      <span>本场</span>
-    </div>
-  );
-}
-
-function Pill({
-  selected,
-  children,
-  disabled = false,
-  onClick,
-}: {
-  selected: boolean;
-  children: React.ReactNode;
-  disabled?: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      aria-pressed={selected}
-      className={selected ? 'mj-rule-pill mj-rule-pill--selected' : 'mj-rule-pill'}
-      disabled={disabled}
-      type="button"
-      onClick={onClick}
-    >
-      {children}
-    </button>
   );
 }
 
@@ -725,10 +682,7 @@ function QuickEfficiencyPanel({ computation }: { computation: QuickComputation }
   const countText = `${result.total_effective_tiles} 枚`;
 
   return (
-    <section className="mj-design-card">
-      <header className="mj-design-card__header">
-        <h2>未和牌时</h2>
-      </header>
+    <SectionCard density="compact" title="未和牌时">
       <p className="mj-efficiency-title">{shantenText} · 有效牌 {countText}</p>
       <div className="mj-quick-tile-row">
         {effective_tiles.length > 0 ? (
@@ -739,7 +693,7 @@ function QuickEfficiencyPanel({ computation }: { computation: QuickComputation }
           <span className="mj-muted-line">没有可列出的有效牌</span>
         )}
       </div>
-    </section>
+    </SectionCard>
   );
 }
 
