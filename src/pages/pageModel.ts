@@ -1,21 +1,7 @@
-import {
-  Calculator,
-  ClipboardList,
-  GraduationCap,
-  House,
-  HelpCircle,
-  Layers,
-  NotebookTabs,
-  ScrollText,
-  ScanLine,
-  TableProperties,
-  Target,
-  TrendingUp,
-} from 'lucide-react';
+import { BookOpen, Calculator, GraduationCap, Wrench } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 export type PageId =
-  | 'home'
   | 'quick-score'
   | 'chinitsu'
   | 'han-fu-calculator'
@@ -33,118 +19,70 @@ export type PageId =
   | 'placeholder'
   | 'contact';
 
-export type ModuleStatus = 'ready' | 'placeholder';
+export type AppSectionId = 'score' | 'practice' | 'reference' | 'tools';
 
-export interface NavEntry {
-  id: PageId;
-  group: '计分' | '练习' | '资料' | '记录与识别';
-  title: string;
-  subtitle: string;
-  status: ModuleStatus;
-  icon: LucideIcon;
+export interface AppSectionTab {
+  page: PageId;
+  label: string;
 }
 
-export const NAV_ENTRIES: NavEntry[] = [
+export interface AppSection {
+  id: AppSectionId;
+  label: string;
+  icon: LucideIcon;
+  defaultPage: PageId;
+  tabs: readonly AppSectionTab[];
+}
+
+export const APP_SECTIONS: readonly AppSection[] = [
   {
-    id: 'quick-score',
-    group: '计分',
-    title: '快速点数计算',
-    subtitle: '手牌、宝牌、场况与四麻/三麻结算',
-    status: 'ready',
+    id: 'score',
+    label: '算分',
     icon: Calculator,
+    defaultPage: 'quick-score',
+    tabs: [
+      { page: 'quick-score', label: '快速算分' },
+      { page: 'han-fu-calculator', label: '番符换算' },
+      { page: 'legacy-score', label: '古役' },
+    ],
   },
   {
-    id: 'han-fu-calculator',
-    group: '计分',
-    title: '番符点数计算',
-    subtitle: '选择番符并查看庄闲荣和/自摸支付',
-    status: 'ready',
-    icon: TableProperties,
-  },
-  {
-    id: 'fu-practice',
-    group: '练习',
-    title: '符数计算练习',
-    subtitle: '手算符数、查看拆解与标准答案',
-    status: 'ready',
+    id: 'practice',
+    label: '练习',
     icon: GraduationCap,
+    defaultPage: 'fu-practice',
+    tabs: [
+      { page: 'fu-practice', label: '符数' },
+      { page: 'point-practice', label: '点数' },
+      { page: 'chinitsu', label: '清一色' },
+      { page: 'comeback', label: '逆转' },
+    ],
   },
   {
-    id: 'point-practice',
-    group: '练习',
-    title: '点数计算练习',
-    subtitle: '输入总得点，可展开番符速查表',
-    status: 'ready',
-    icon: Target,
+    id: 'reference',
+    label: '资料',
+    icon: BookOpen,
+    defaultPage: 'yaku-list',
+    tabs: [
+      { page: 'yaku-list', label: '役种' },
+      { page: 'help-fu', label: '符数' },
+      { page: 'help-points', label: '点数' },
+      { page: 'han-fu-table', label: '点数表' },
+    ],
   },
   {
-    id: 'chinitsu',
-    group: '练习',
-    title: '清一色听牌练习',
-    subtitle: '从一到九同花色牌中选择全部听牌',
-    status: 'ready',
-    icon: Layers,
-  },
-  {
-    id: 'comeback',
-    group: '练习',
-    title: '逆转番符练习',
-    subtitle: '按分差判断各番最低符数',
-    status: 'ready',
-    icon: TrendingUp,
-  },
-  {
-    id: 'yaku-list',
-    group: '资料',
-    title: '役种列表',
-    subtitle: '雀魂完整役种、古役、宝牌说明与流局条件',
-    status: 'ready',
-    icon: NotebookTabs,
-  },
-  {
-    id: 'legacy-score',
-    group: '计分',
-    title: '古役点数计算',
-    subtitle: '录入或识别手牌，自动判定牌型古役',
-    status: 'ready',
-    icon: ScrollText,
-  },
-  {
-    id: 'help-fu',
-    group: '资料',
-    title: '符数帮助',
-    subtitle: '和牌符、听牌符、面子符与取整规则',
-    status: 'ready',
-    icon: HelpCircle,
-  },
-  {
-    id: 'help-points',
-    group: '资料',
-    title: '点数帮助',
-    subtitle: '基本点公式、满贯级别与支付方式',
-    status: 'ready',
-    icon: House,
-  },
-  {
-    id: 'table-records',
-    group: '记录与识别',
-    title: '面麻点数记录',
-    subtitle: '本地记录流水、写入点差并支持撤销',
-    status: 'ready',
-    icon: ClipboardList,
-  },
-  {
-    id: 'hand-recognition',
-    group: '记录与识别',
-    title: '实体手牌识别',
-    subtitle: '导入照片后用牌键盘确认最终牌序',
-    status: 'ready',
-    icon: ScanLine,
+    id: 'tools',
+    label: '工具',
+    icon: Wrench,
+    defaultPage: 'table-records',
+    tabs: [
+      { page: 'table-records', label: '牌局记录' },
+      { page: 'hand-recognition', label: '手牌识别' },
+    ],
   },
 ];
 
 export const PAGE_TITLES: Record<PageId, string> = {
-  home: '日麻点数',
   'quick-score': '快速点数计算',
   chinitsu: '清一色听牌练习',
   'han-fu-calculator': '番符点数计算',
@@ -163,6 +101,48 @@ export const PAGE_TITLES: Record<PageId, string> = {
   contact: '联系反馈',
 };
 
-export function entryForPage(page: PageId) {
-  return NAV_ENTRIES.find((entry) => entry.id === page);
+const KNOWN_PAGES = new Set<PageId>(Object.keys(PAGE_TITLES) as PageId[]);
+
+export interface PageResolution {
+  page: PageId;
+  canonicalHash?: string;
+}
+
+export function sectionForPage(page: PageId): AppSection | undefined {
+  return APP_SECTIONS.find((section) => section.tabs.some((tab) => tab.page === page));
+}
+
+export function sectionById(sectionId: AppSectionId): AppSection {
+  const section = APP_SECTIONS.find((candidate) => candidate.id === sectionId);
+  if (!section) throw new Error(`Unknown app section: ${sectionId}`);
+  return section;
+}
+
+export function defaultPageForSection(sectionId: AppSectionId): PageId {
+  return sectionById(sectionId).defaultPage;
+}
+
+export function resolvePageFromHash(hash: string): PageResolution {
+  const fragment = hash.replace(/^#\/?/, '');
+  const queryIndex = fragment.indexOf('?');
+  const rawPage = queryIndex === -1 ? fragment : fragment.slice(0, queryIndex);
+  const rawQuery = queryIndex === -1 ? '' : fragment.slice(queryIndex + 1);
+
+  if (rawPage === 'home') {
+    const params = new URLSearchParams(rawQuery);
+    if (params.get('contact') === '1') {
+      return { page: 'contact', canonicalHash: '#/contact' };
+    }
+    return { page: 'quick-score', canonicalHash: '#/quick-score' };
+  }
+
+  if (rawPage === 'yaku-detail') {
+    return { page: 'yaku-list', canonicalHash: '#/yaku-list' };
+  }
+
+  if (KNOWN_PAGES.has(rawPage as PageId)) {
+    return { page: rawPage as PageId };
+  }
+
+  return { page: 'quick-score', canonicalHash: '#/quick-score' };
 }

@@ -7,7 +7,7 @@ export const pageStoryParameters = {
   mobileCanvas: true,
   docs: {
     description: {
-      component: 'Canvas 直接渲染生产环境的 AppScreen 与真实页面；导航和分享在 Storybook 中使用模拟回调，不会触发浏览器跳转或系统能力。',
+      component: 'Canvas 直接渲染生产环境的 AppScreen 与真实页面；导航在 Storybook 中使用模拟回调，不会触发浏览器跳转。',
     },
   },
 } as const;
@@ -21,4 +21,8 @@ export function createPageStoryArgs(): Pick<AppScreenProps, 'onNavigate' | 'onSh
 
 export async function expectPageTitle(canvasElement: HTMLElement, title: string) {
   await expect(canvasElement.querySelector('.mj-top-nav__title strong')).toHaveTextContent(title);
+}
+
+export async function expectNoPrimaryHeader(canvasElement: HTMLElement) {
+  await expect(canvasElement.querySelector('.mj-top-nav')).not.toBeInTheDocument();
 }

@@ -1,13 +1,18 @@
-import { HelpCircle, Share2 } from 'lucide-react';
+import { useEffect, useRef } from 'react';
 
-import { Alert, AppFrame, TopNav, type TopNavAction } from './components';
+import {
+  Alert,
+  AppFrame,
+  BottomTabBar,
+  ModuleTabs,
+  TopNav,
+} from './components';
 import {
   DesignedPlaceholderPage,
   HandRecognitionPage,
   TableRecordsPage,
   TileKeyboardDemoPage,
 } from './pages/DeferredPages';
-import { HomePage } from './pages/HomePage';
 import { ContactPage } from './pages/PlaceholderContactPages';
 import { HanFuCalculatorPage, HanFuTablePage } from './pages/PointPages';
 import {
@@ -18,7 +23,14 @@ import {
 } from './pages/PracticePages';
 import { LegacyScorePage, QuickScorePage } from './pages/QuickScorePage';
 import { FuHelpPage, PointHelpPage, YakuListPage } from './pages/YakuHelpPages';
-import { PAGE_TITLES, entryForPage, type PageId } from './pages/pageModel';
+import {
+  APP_SECTIONS,
+  PAGE_TITLES,
+  defaultPageForSection,
+  sectionForPage,
+  type AppSectionId,
+  type PageId,
+} from './pages/pageModel';
 import './pages.css';
 
 export type AppShareStatus = {
@@ -33,32 +45,63 @@ export interface AppScreenProps {
   shareStatus?: AppShareStatus;
 }
 
-export function AppScreen({ page, onNavigate, onShare, shareStatus = null }: AppScreenProps) {
-  const entry = entryForPage(page);
-  const navActions: TopNavAction[] = [
-    {
-      label: '帮助',
-      icon: <HelpCircle aria-hidden="true" />,
-      onClick: () => onNavigate(page === 'help-fu' ? 'help-points' : 'help-fu'),
-    },
-    {
-      label: '分享',
-      icon: <Share2 aria-hidden="true" />,
-      onClick: onShare,
-    },
-  ];
+function initialVisitedPages(): Record<AppSectionId, PageId> {
+  return Object.fromEntries(
+    APP_SECTIONS.map((section) => [section.id, section.defaultPage]),
+  ) as Record<AppSectionId, PageId>;
+}
+
+export function AppScreen({ page, onNavigate, shareStatus = null }: AppScreenProps) {
+  const lastVisitedPagesRef = useRef<Record<AppSectionId, PageId>>(initialVisitedPages());
+  const lastPrimaryPageRef = useRef<PageId>('quick-score');
+  const currentSection = sectionForPage(page);
+  const fallbackSection = sectionForPage(lastPrimaryPageRef.current);
+  const activeSection = currentSection ?? fallbackSection;
+
+  useEffect(() => {
+    if (currentSection) {
+      lastVisitedPagesRef.current[currentSection.id] = page;
+      lastPrimaryPageRef.current = page;
+    }
+  }, [currentSection, page]);
+
+  const navigateToSection = (sectionId: AppSectionId) => {
+    const target = lastVisitedPagesRef.current[sectionId] ?? defaultPageForSection(sectionId);
+    if (target !== page) onNavigate(target);
+  };
+
+  const navigateBack = () => {
+    onNavigate(lastPrimaryPageRef.current);
+  };
+
+  const navigation = (
+    <div className="mj-app-navigation">
+      {currentSection ? (
+        <ModuleTabs
+          activeId={page}
+          ariaLabel={`${currentSection.label}功能`}
+          items={currentSection.tabs.map((tab) => ({ id: tab.page, label: tab.label }))}
+          onSelect={onNavigate}
+        />
+      ) : (
+        <TopNav title={PAGE_TITLES[page]} onBack={navigateBack} />
+      )}
+    </div>
+  );
+
+  const bottomNavigation = (
+    <BottomTabBar
+      activeId={activeSection?.id}
+      items={APP_SECTIONS.map((section) => {
+        const Icon = section.icon;
+        return { id: section.id, label: section.label, icon: <Icon aria-hidden="true" /> };
+      })}
+      onSelect={navigateToSection}
+    />
+  );
 
   return (
-    <AppFrame
-      nav={(
-        <TopNav
-          actions={navActions}
-          subtitle={entry?.subtitle}
-          title={PAGE_TITLES[page]}
-          onBack={page === 'home' ? undefined : () => onNavigate('home')}
-        />
-      )}
-    >
+    <AppFrame footer={bottomNavigation} nav={navigation}>
       {shareStatus ? <Alert className="mj-app-toast" tone={shareStatus.tone}>{shareStatus.message}</Alert> : null}
       {renderPage(page, onNavigate)}
     </AppFrame>
@@ -67,8 +110,6 @@ export function AppScreen({ page, onNavigate, onShare, shareStatus = null }: App
 
 function renderPage(page: PageId, onNavigate: (page: PageId) => void) {
   switch (page) {
-    case 'home':
-      return <HomePage navigate={onNavigate} />;
     case 'quick-score':
       return <QuickScorePage />;
     case 'han-fu-calculator':

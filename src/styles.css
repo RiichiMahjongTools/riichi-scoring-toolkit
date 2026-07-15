@@ -17,6 +17,7 @@
   --mj-radius: 16px;
   --mj-radius-sm: 8px;
   --mj-shadow: 0 2px 7px rgb(0 0 0 / 6%);
+  --mj-bottom-nav-height: 64px;
   font-family: 'Noto Sans SC', system-ui, sans-serif;
   color: var(--mj-ink);
   background: var(--mj-bg);

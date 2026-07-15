@@ -56,6 +56,9 @@ export interface TopNavAction {
   onClick: () => void;
   disabled?: boolean;
   variant?: 'plain' | 'surface' | 'danger';
+  ariaControls?: string;
+  ariaExpanded?: boolean;
+  ariaHaspopup?: 'menu';
 }
 
 export interface TopNavProps extends Omit<HTMLAttributes<HTMLElement>, 'title'> {
@@ -104,10 +107,97 @@ export function TopNav({
             onClick={action.onClick}
             disabled={action.disabled}
             variant={action.variant}
+            aria-controls={action.ariaControls}
+            aria-expanded={action.ariaExpanded}
+            aria-haspopup={action.ariaHaspopup}
           />
         ))}
       </div>
     </header>
+  );
+}
+
+export interface ModuleTabItem<T extends string = string> {
+  id: T;
+  label: ReactNode;
+}
+
+export interface ModuleTabsProps<T extends string = string> {
+  items: readonly ModuleTabItem<T>[];
+  activeId: T;
+  onSelect: (id: T) => void;
+  ariaLabel?: string;
+  className?: string;
+}
+
+export function ModuleTabs<T extends string = string>({
+  items,
+  activeId,
+  onSelect,
+  ariaLabel = '当前模块功能',
+  className,
+}: ModuleTabsProps<T>) {
+  return (
+    <nav aria-label={ariaLabel} className={cx('mj-module-tabs', className)}>
+      <div className="mj-module-tabs__track">
+        {items.map((item) => {
+          const selected = item.id === activeId;
+          return (
+            <button
+              key={item.id}
+              aria-current={selected ? 'page' : undefined}
+              className={cx('mj-module-tabs__item', selected && 'mj-module-tabs__item--selected')}
+              type="button"
+              onClick={() => onSelect(item.id)}
+            >
+              {item.label}
+            </button>
+          );
+        })}
+      </div>
+    </nav>
+  );
+}
+
+export interface BottomTabBarItem<T extends string = string> {
+  id: T;
+  label: ReactNode;
+  icon: ReactNode;
+}
+
+export interface BottomTabBarProps<T extends string = string> {
+  items: readonly BottomTabBarItem<T>[];
+  activeId?: T;
+  onSelect: (id: T) => void;
+  ariaLabel?: string;
+  className?: string;
+}
+
+export function BottomTabBar<T extends string = string>({
+  items,
+  activeId,
+  onSelect,
+  ariaLabel = '主要功能',
+  className,
+}: BottomTabBarProps<T>) {
+  return (
+    <nav aria-label={ariaLabel} className={cx('mj-bottom-tab-bar', className)}>
+      {items.map((item) => {
+        const selected = item.id === activeId;
+        return (
+          <button
+            key={item.id}
+            aria-current={selected ? 'page' : undefined}
+            className={cx('mj-bottom-tab-bar__item', selected && 'mj-bottom-tab-bar__item--selected')}
+            type="button"
+            onClick={() => onSelect(item.id)}
+          >
+            <span className="mj-bottom-tab-bar__icon">{item.icon}</span>
+            <span>{item.label}</span>
+          </button>
+        );
+      })}
+    </nav>
   );
 }
 
@@ -1170,7 +1260,7 @@ export interface PlaceholderPanelProps extends Omit<HTMLAttributes<HTMLDivElemen
 
 export function PlaceholderPanel({
   title = '页面不可用',
-  description = '当前入口没有绑定到可用页面，请返回首页重新选择。',
+  description = '当前入口没有绑定到可用页面，请返回快速算分继续使用。',
   statusLabel = 'Later Scope',
   icon = <Wrench aria-hidden="true" />,
   actions,

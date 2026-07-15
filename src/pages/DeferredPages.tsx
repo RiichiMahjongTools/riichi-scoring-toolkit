@@ -731,11 +731,11 @@ export function DesignedPlaceholderPage({ navigate }: PageProps) {
     <div className="mj-page-stack mj-placeholder-designed-page">
       <SectionCard title="没有匹配的页面">
         <Alert icon={<AlertCircle aria-hidden="true" />} tone="warning">
-          当前入口没有绑定到可用功能，请返回首页重新选择。
+          当前入口没有绑定到可用功能，请返回快速算分或选择其他底部功能。
         </Alert>
       </SectionCard>
-      <ActionButton fullWidth icon={<Home aria-hidden="true" />} onClick={() => navigate('home')}>
-        返回首页
+      <ActionButton fullWidth icon={<Home aria-hidden="true" />} onClick={() => navigate('quick-score')}>
+        返回快速算分
       </ActionButton>
     </div>
   );

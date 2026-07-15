@@ -1,20 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { AppScreen, type AppShareStatus } from './AppScreen';
-import { PAGE_TITLES, type PageId } from './pages/pageModel';
-
-const KNOWN_PAGES = new Set<PageId>(Object.keys(PAGE_TITLES) as PageId[]);
-
-function pageNameFromHash() {
-  return window.location.hash.replace(/^#\/?/, '').split(/[?&]/)[0];
-}
-
-function pageFromHash(): PageId {
-  const raw = pageNameFromHash();
-  if (!raw) return 'home';
-  if (raw === 'yaku-detail') return 'yaku-list';
-  return KNOWN_PAGES.has(raw as PageId) ? (raw as PageId) : 'home';
-}
+import { PAGE_TITLES, resolvePageFromHash, type PageId } from './pages/pageModel';
 
 async function copyText(text: string) {
   try {
@@ -30,19 +17,20 @@ async function copyText(text: string) {
 }
 
 export default function App() {
-  const [page, setPage] = useState<PageId>(() => pageFromHash());
+  const [page, setPage] = useState<PageId>(() => resolvePageFromHash(window.location.hash).page);
   const [shareStatus, setShareStatus] = useState<AppShareStatus>(null);
 
   useEffect(() => {
     const syncPage = () => {
-      if (pageNameFromHash() === 'yaku-detail') {
-        window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#/yaku-list`);
+      const resolution = resolvePageFromHash(window.location.hash);
+      if (resolution.canonicalHash && window.location.hash !== resolution.canonicalHash) {
+        window.history.replaceState(
+          null,
+          '',
+          `${window.location.pathname}${window.location.search}${resolution.canonicalHash}`,
+        );
       }
-      const nextPage = pageFromHash();
-      setPage(nextPage);
-      if (nextPage === 'home' && window.location.hash && !window.location.hash.startsWith('#/home')) {
-        window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#/home`);
-      }
+      setPage(resolution.page);
     };
     window.addEventListener('hashchange', syncPage);
     syncPage();

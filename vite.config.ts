@@ -22,7 +22,7 @@ export default defineConfig({
         short_name: '日麻点数',
         description: '日麻点数计算、练习与速查工具',
         lang: 'zh-CN',
-        start_url: '/#/home',
+        start_url: '/#/quick-score',
         scope: '/',
         display: 'standalone',
         theme_color: '#F6F2E8',

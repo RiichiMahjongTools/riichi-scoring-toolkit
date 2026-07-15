@@ -1,4 +1,4 @@
-import { Home } from 'lucide-react';
+import { Calculator } from 'lucide-react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
 import { ActionButton, PlaceholderPanel } from '../index';
@@ -10,7 +10,7 @@ const meta = {
     title: '功能暂未开放',
     description: '当前入口还没有可用内容。',
     statusLabel: 'Coming Soon',
-    actions: <ActionButton icon={<Home aria-hidden="true" />}>返回首页</ActionButton>,
+    actions: <ActionButton icon={<Calculator aria-hidden="true" />}>返回快速算分</ActionButton>,
   },
 } satisfies Meta<typeof PlaceholderPanel>;
 

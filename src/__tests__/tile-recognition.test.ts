@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { recognitionTilesToHash } from '../domain/recognitionRouting';
-import { parseQuickScoreTileImport } from '../pages/QuickScorePage';
+import { parseQuickScoreTileImport, removeQuickScoreTileImport } from '../pages/QuickScorePage';
 import {
   RIICHI_TILE_YOLO_LABELS,
   buildRecognitionResult,
@@ -119,6 +119,7 @@ describe('tile recognition pipeline', () => {
     expect(parseQuickScoreTileImport(hash)).toEqual(['m1', 'm2', 'm5r', 'z7']);
     expect(parseQuickScoreTileImport('#/quick-score?tiles=m1,bad,z7')).toEqual(['m1', 'z7']);
     expect(recognitionTilesToHash(['m1', 'z7'], 'legacy-score')).toBe('#/legacy-score?tiles=m1%2Cz7');
+    expect(removeQuickScoreTileImport('#/quick-score?tiles=m1%2Cz7&source=camera')).toBe('#/quick-score?source=camera');
   });
 
   it('sorts detections only by horizontal position', () => {

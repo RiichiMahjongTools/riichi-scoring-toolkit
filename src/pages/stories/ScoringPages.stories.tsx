@@ -2,13 +2,17 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, userEvent, within } from 'storybook/test';
 
 import { AppScreen } from '../../AppScreen';
-import { createPageStoryArgs, expectPageTitle, pageStoryParameters } from './storySupport';
+import { createPageStoryArgs, expectNoPrimaryHeader, pageStoryParameters } from './storySupport';
 
 const meta = {
   title: 'Pages/Scoring',
   component: AppScreen,
   args: createPageStoryArgs(),
   parameters: pageStoryParameters,
+  beforeEach: () => {
+    sessionStorage.removeItem('mahjong.scoreDraft.quick.v1');
+    sessionStorage.removeItem('mahjong.scoreDraft.legacy.v1');
+  },
 } satisfies Meta<typeof AppScreen>;
 
 export default meta;
@@ -18,14 +22,11 @@ export const HanFuCalculator: Story = {
   args: { page: 'han-fu-calculator' },
   play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
-    await expectPageTitle(canvasElement, '番符点数计算');
+    await expectNoPrimaryHeader(canvasElement);
     await expect(canvas.getByRole('heading', { name: '选择番数与符数' })).toBeInTheDocument();
-    await userEvent.click(canvas.getByRole('button', { name: '返回' }));
-    await userEvent.click(canvas.getByRole('button', { name: '帮助' }));
-    await userEvent.click(canvas.getByRole('button', { name: '分享' }));
-    await expect(args.onNavigate).toHaveBeenNthCalledWith(1, 'home');
-    await expect(args.onNavigate).toHaveBeenNthCalledWith(2, 'help-fu');
-    await expect(args.onShare).toHaveBeenCalledOnce();
+    await expect(canvas.getByRole('button', { name: '番符换算' })).toHaveAttribute('aria-current', 'page');
+    await userEvent.click(canvas.getByRole('button', { name: '快速算分' }));
+    await expect(args.onNavigate).toHaveBeenCalledWith('quick-score');
   },
 };
 
@@ -44,7 +45,8 @@ export const QuickScore: Story = {
   args: { page: 'quick-score' },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expectPageTitle(canvasElement, '快速点数计算');
+    await expectNoPrimaryHeader(canvasElement);
+    await expect(canvas.getByText('-')).toHaveStyle({ fontWeight: '900' });
     await expect(canvas.getByRole('heading', { name: '额外役与修正' })).toBeInTheDocument();
   },
 };
@@ -65,7 +67,8 @@ export const LegacyScore: Story = {
   args: { page: 'legacy-score' },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expectPageTitle(canvasElement, '古役点数计算');
+    await expectNoPrimaryHeader(canvasElement);
+    await expect(canvas.getByText('-')).toHaveStyle({ fontWeight: '900' });
     await expect(canvas.getByRole('heading', { name: '额外役与修正' })).toBeInTheDocument();
   },
 };

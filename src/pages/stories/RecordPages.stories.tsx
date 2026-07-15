@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, userEvent, within } from 'storybook/test';
 
 import { AppScreen } from '../../AppScreen';
-import { createPageStoryArgs, expectPageTitle, pageStoryParameters } from './storySupport';
+import { createPageStoryArgs, expectNoPrimaryHeader, pageStoryParameters } from './storySupport';
 
 const meta = {
   title: 'Pages/Records',
@@ -17,7 +17,7 @@ type Story = StoryObj<typeof meta>;
 export const TableRecords: Story = {
   args: { page: 'table-records' },
   play: async ({ canvasElement }) => {
-    await expectPageTitle(canvasElement, '面麻点数记录');
+    await expectNoPrimaryHeader(canvasElement);
     await expect(within(canvasElement).getByRole('heading', { name: '记录一手' })).toBeInTheDocument();
   },
 };
@@ -35,7 +35,7 @@ export const TableRecordsWithHistory: Story = {
 export const HandRecognition: Story = {
   args: { page: 'hand-recognition' },
   play: async ({ canvasElement }) => {
-    await expectPageTitle(canvasElement, '实体手牌识别');
+    await expectNoPrimaryHeader(canvasElement);
     await expect(within(canvasElement).getByText('导入照片后在本地预览')).toBeInTheDocument();
   },
 };

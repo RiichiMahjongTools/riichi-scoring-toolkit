@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, userEvent, within } from 'storybook/test';
 
 import { AppScreen } from '../../AppScreen';
-import { createPageStoryArgs, expectPageTitle, pageStoryParameters } from './storySupport';
+import { createPageStoryArgs, expectNoPrimaryHeader, pageStoryParameters } from './storySupport';
 
 const meta = {
   title: 'Pages/Practice',
@@ -17,7 +17,7 @@ type Story = StoryObj<typeof meta>;
 export const Chinitsu: Story = {
   args: { page: 'chinitsu' },
   play: async ({ canvasElement }) => {
-    await expectPageTitle(canvasElement, '清一色听牌练习');
+    await expectNoPrimaryHeader(canvasElement);
     await expect(within(canvasElement).getByRole('heading', { name: '清一色手牌' })).toBeInTheDocument();
   },
 };
@@ -37,7 +37,7 @@ export const ChinitsuFeedback: Story = {
 export const FuPractice: Story = {
   args: { page: 'fu-practice' },
   play: async ({ canvasElement }) => {
-    await expectPageTitle(canvasElement, '符数计算练习');
+    await expectNoPrimaryHeader(canvasElement);
     await expect(within(canvasElement).getByRole('heading', { name: '选择最终符数' })).toBeInTheDocument();
   },
 };
@@ -55,7 +55,7 @@ export const FuPracticeFeedback: Story = {
 export const PointPractice: Story = {
   args: { page: 'point-practice' },
   play: async ({ canvasElement }) => {
-    await expectPageTitle(canvasElement, '点数计算练习');
+    await expectNoPrimaryHeader(canvasElement);
     await expect(within(canvasElement).getByRole('heading', { name: '输入总获得点数' })).toBeInTheDocument();
   },
 };
@@ -73,7 +73,7 @@ export const PointPracticeFeedback: Story = {
 export const Comeback: Story = {
   args: { page: 'comeback' },
   play: async ({ canvasElement }) => {
-    await expectPageTitle(canvasElement, '逆转番符练习');
+    await expectNoPrimaryHeader(canvasElement);
     await expect(within(canvasElement).getByLabelText('逆转所需番符作答')).toBeInTheDocument();
   },
 };

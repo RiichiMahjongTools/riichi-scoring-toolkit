@@ -40,6 +40,13 @@ import {
   formatPoints,
   formatWinMethod,
 } from './shared';
+import {
+  applyScoreDraftTileImport,
+  clearScoreDraft,
+  loadScoreDraft,
+  saveScoreDraft,
+  type ScoreDraftV1,
+} from './scoreDraft';
 
 type KeyboardTarget = 'hand' | 'dora' | 'ura' | 'meld';
 type QuickComputation = ScoreComputation | { kind: 'empty' };
@@ -103,6 +110,17 @@ export function parseQuickScoreTileImport(hash: string): TileCode[] {
   if (!rawTiles) return [];
 
   return rawTiles.split(/[,\s]+/).filter(isTileCode).slice(0, 14);
+}
+
+export function removeQuickScoreTileImport(hash: string): string {
+  const fragment = hash.replace(/^#\/?/, '');
+  const queryIndex = fragment.indexOf('?');
+  if (queryIndex === -1) return hash;
+  const page = fragment.slice(0, queryIndex);
+  const params = new URLSearchParams(fragment.slice(queryIndex + 1));
+  params.delete('tiles');
+  const query = params.toString();
+  return `#/${page}${query ? `?${query}` : ''}`;
 }
 
 function hasFourPhysicalCopies(tile: string, currentTiles: string[]) {
@@ -170,23 +188,27 @@ export function LegacyScorePage() {
 
 function ScoreCalculatorPage({ variant }: { variant: ScorePageVariant }) {
   const isLegacy = variant === 'legacy';
-  const initialImportedTiles = parseQuickScoreTileImport(window.location.hash);
-  const [mode, setMode] = useState<ScoreMode>('yonma');
-  const [handTiles, setHandTiles] = useState<TileCode[]>(initialImportedTiles);
-  const [winTileIndex, setWinTileIndex] = useState<number | null>(
-    initialImportedTiles.length > 0 ? initialImportedTiles.length - 1 : null,
+  const [initialDraft] = useState(() => {
+    const savedDraft = loadScoreDraft(variant);
+    if (typeof window === 'undefined') return savedDraft;
+    return applyScoreDraftTileImport(savedDraft, parseQuickScoreTileImport(window.location.hash));
+  });
+  const [mode, setMode] = useState<ScoreMode>(initialDraft.mode);
+  const [handTiles, setHandTiles] = useState<TileCode[]>(initialDraft.handTiles);
+  const [winTileIndex, setWinTileIndex] = useState<number | null>(initialDraft.winTileIndex);
+  const [melds, setMelds] = useState<MeldInput[]>(
+    initialDraft.melds.map((meld) => createMeldInput(meld.kind, parseTileCodes(meld.tiles))),
   );
-  const [melds, setMelds] = useState<MeldInput[]>([]);
   const [meldKind, setMeldKind] = useState<MeldKind>('chi');
   const [meldDraftTiles, setMeldDraftTiles] = useState<TileCode[]>([]);
-  const [doraIndicators, setDoraIndicators] = useState<TileCode[]>([]);
-  const [uraDoraIndicators, setUraDoraIndicators] = useState<TileCode[]>([]);
-  const [roundWind, setRoundWind] = useState<Wind>('east');
-  const [seatWind, setSeatWind] = useState<Wind>('south');
-  const [honba, setHonba] = useState(0);
-  const [northDoraCount, setNorthDoraCount] = useState<0 | 1 | 2 | 3 | 4>(0);
-  const [doubleWindPairTwoFu, setDoubleWindPairTwoFu] = useState(false);
-  const [conditions, setConditions] = useState<ScoreConditions>({ ...DEFAULT_SCORE_CONDITIONS });
+  const [doraIndicators, setDoraIndicators] = useState<TileCode[]>(initialDraft.doraIndicators);
+  const [uraDoraIndicators, setUraDoraIndicators] = useState<TileCode[]>(initialDraft.uraDoraIndicators);
+  const [roundWind, setRoundWind] = useState<Wind>(initialDraft.roundWind);
+  const [seatWind, setSeatWind] = useState<Wind>(initialDraft.seatWind);
+  const [honba, setHonba] = useState(initialDraft.honba);
+  const [northDoraCount, setNorthDoraCount] = useState<0 | 1 | 2 | 3 | 4>(initialDraft.northDoraCount);
+  const [doubleWindPairTwoFu, setDoubleWindPairTwoFu] = useState(initialDraft.doubleWindPairTwoFu);
+  const [conditions, setConditions] = useState<ScoreConditions>({ ...initialDraft.conditions });
   const [keyboardTarget, setKeyboardTarget] = useState<KeyboardTarget | null>(null);
   const [copyMessage, setCopyMessage] = useState('');
   const meldDraftError = validateMeldDraft(meldKind, meldDraftTiles, mode);
@@ -196,16 +218,61 @@ function ScoreCalculatorPage({ variant }: { variant: ScorePageVariant }) {
   useEffect(() => {
     const applyImportedTiles = () => {
       const importedTiles = parseQuickScoreTileImport(window.location.hash);
-      if (importedTiles.length === 0) return;
-      setHandTiles(importedTiles);
-      setWinTileIndex(importedTiles.length - 1);
-      setCopyMessage('已带入识别手牌，请确认和牌张/最后摸切张');
+      const canonicalHash = removeQuickScoreTileImport(window.location.hash);
+      if (importedTiles.length > 0) {
+        setHandTiles(importedTiles);
+        setWinTileIndex(importedTiles.length - 1);
+        setCopyMessage('已带入识别手牌，请确认和牌张/最后摸切张');
+      }
+      if (canonicalHash !== window.location.hash) {
+        window.history.replaceState(
+          null,
+          '',
+          `${window.location.pathname}${window.location.search}${canonicalHash}`,
+        );
+      }
     };
 
     applyImportedTiles();
     window.addEventListener('hashchange', applyImportedTiles);
     return () => window.removeEventListener('hashchange', applyImportedTiles);
   }, []);
+
+  useEffect(() => {
+    const draft: ScoreDraftV1 = {
+      version: 1,
+      mode,
+      handTiles,
+      winTileIndex,
+      melds: melds.map((meld) => ({
+        kind: getMeldKind(meld),
+        tiles: meld.tiles.map(tileToCode),
+      })),
+      doraIndicators,
+      uraDoraIndicators,
+      roundWind,
+      seatWind,
+      honba,
+      northDoraCount,
+      doubleWindPairTwoFu,
+      conditions,
+    };
+    saveScoreDraft(variant, draft);
+  }, [
+    conditions,
+    doraIndicators,
+    doubleWindPairTwoFu,
+    handTiles,
+    honba,
+    melds,
+    mode,
+    northDoraCount,
+    roundWind,
+    seatWind,
+    uraDoraIndicators,
+    variant,
+    winTileIndex,
+  ]);
 
   const computation = useMemo<QuickComputation>(() => {
     if (handTiles.length === 0) return { kind: 'empty' };
@@ -302,9 +369,12 @@ function ScoreCalculatorPage({ variant }: { variant: ScorePageVariant }) {
   };
 
   const reset = () => {
+    clearScoreDraft(variant);
+    setMode('yonma');
     setHandTiles([]);
     setWinTileIndex(null);
     setMelds([]);
+    setMeldKind('chi');
     setMeldDraftTiles([]);
     setDoraIndicators([]);
     setUraDoraIndicators([]);
@@ -314,6 +384,7 @@ function ScoreCalculatorPage({ variant }: { variant: ScorePageVariant }) {
     setNorthDoraCount(0);
     setDoubleWindPairTwoFu(false);
     setConditions({ ...DEFAULT_SCORE_CONDITIONS });
+    setKeyboardTarget(null);
     setCopyMessage('');
   };
 

@@ -1,26 +1,24 @@
-import { Copy, Home, Mail } from 'lucide-react';
+import { Calculator, Copy, Mail } from 'lucide-react';
 import { useState } from 'react';
 
 import { ActionButton, Alert, ContactPanel, PlaceholderPanel, SectionCard } from '../components';
-import { entryForPage, type PageId } from './pageModel';
+import { PAGE_TITLES, type PageId } from './pageModel';
 import type { PageProps } from './shared';
 
 const PLACEHOLDER_COPY: Partial<Record<PageId, string>> = {
-  placeholder: '当前入口没有绑定到可用页面，请返回首页重新选择。',
+  placeholder: '当前入口没有绑定到可用页面，请返回快速算分或选择其他底部功能。',
 };
 
 export function SafePlaceholderPage({ page, navigate }: PageProps & { page: PageId }) {
-  const entry = entryForPage(page);
-
   return (
     <div className="mj-page-stack">
       <PlaceholderPanel
-        title={entry?.title ?? '页面不可用'}
-        description={PLACEHOLDER_COPY[page] ?? entry?.subtitle ?? PLACEHOLDER_COPY.placeholder}
+        title={PAGE_TITLES[page] ?? '页面不可用'}
+        description={PLACEHOLDER_COPY[page] ?? PLACEHOLDER_COPY.placeholder}
         actions={
           <>
-            <ActionButton icon={<Home aria-hidden="true" />} variant="secondary" onClick={() => navigate('home')}>
-              回首页
+            <ActionButton icon={<Calculator aria-hidden="true" />} variant="secondary" onClick={() => navigate('quick-score')}>
+              快速算分
             </ActionButton>
             <ActionButton onClick={() => navigate('contact')}>反馈需求</ActionButton>
           </>

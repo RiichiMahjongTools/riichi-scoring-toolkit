@@ -16,9 +16,12 @@ type Story = StoryObj<typeof meta>;
 
 export const Contact: Story = {
   args: { page: 'contact' },
-  play: async ({ canvasElement }) => {
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
     await expectPageTitle(canvasElement, '联系反馈');
-    await expect(within(canvasElement).getByLabelText('反馈内容')).toBeInTheDocument();
+    await expect(canvas.getByLabelText('反馈内容')).toBeInTheDocument();
+    await userEvent.click(canvas.getByRole('button', { name: '返回' }));
+    await expect(args.onNavigate).toHaveBeenCalledWith('quick-score');
   },
 };
 
