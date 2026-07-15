@@ -7,6 +7,7 @@
   --mj-green: #153b2c;
   --mj-green-soft: #dcebdd;
   --mj-gold: #b98427;
+  --mj-gold-ink: #765014;
   --mj-gold-soft: #fff2ca;
   --mj-red: #b9362e;
   --mj-red-soft: #fbe7e1;
@@ -29,7 +30,7 @@
 
 body {
   margin: 0;
-  min-width: 320px;
+  min-width: 0;
   background: var(--mj-bg);
 }
 
@@ -42,31 +43,6 @@ textarea {
 
 button {
   cursor: pointer;
-}
-
-.app-shell {
-  width: min(100%, 430px);
-  min-height: 100vh;
-  margin: 0 auto;
-  padding: 18px;
-  background: var(--mj-bg);
-}
-
-.section-card {
-  border: 1px solid var(--mj-line);
-  border-radius: var(--mj-radius);
-  background: var(--mj-surface);
-  box-shadow: var(--mj-shadow);
-  padding: 16px;
-}
-
-.eyebrow {
-  margin: 0 0 4px;
-  color: var(--mj-gold);
-  font-family: 'Geist Mono', ui-monospace, monospace;
-  font-size: 12px;
-  font-weight: 800;
-  text-transform: uppercase;
 }
 
 h1 {

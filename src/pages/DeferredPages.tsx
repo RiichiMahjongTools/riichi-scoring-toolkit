@@ -19,10 +19,13 @@ import {
   ActionButton,
   Alert,
   Chip,
+  ContentSection,
   DataTable,
+  FieldGroup,
   MahjongTile,
-  SectionCard,
+  PlaceholderPanel,
   SegmentedControl,
+  SurfacePanel,
   TileKeyboard,
   TileStrip,
 } from '../components';
@@ -242,22 +245,22 @@ export function TableRecordsPage() {
 
   return (
     <div className="mj-page-stack mj-table-records-page">
-      <div className="mj-table-record-stats">
-        <span>
-          <small>局数</small>
-          <strong>{roundLabel(roundIndex)}</strong>
-        </span>
-        <span>
-          <small>本场</small>
-          <strong>{honba}本场</strong>
-        </span>
-        <span>
-          <small>合计</small>
-          <strong>{totalScore.toLocaleString('zh-CN')}</strong>
-        </span>
-      </div>
+      <dl className="mj-table-record-stats">
+        <div>
+          <dt>局数</dt>
+          <dd>{roundLabel(roundIndex)}</dd>
+        </div>
+        <div>
+          <dt>本场</dt>
+          <dd>{honba}本场</dd>
+        </div>
+        <div>
+          <dt>合计</dt>
+          <dd>{totalScore.toLocaleString('zh-CN')}</dd>
+        </div>
+      </dl>
 
-      <SectionCard className="mj-table-seat-card" title="四人桌">
+      <ContentSection aria-label="四人桌玩家点数" className="mj-table-seat-section">
         <div className="mj-player-score-list">
           {players.map((player) => {
             const badge = player.id === dealerId ? '亲家' : player.id === winner && outcome !== 'draw' ? '赢家' : player.id === loser && outcome === 'ron' ? '放铳' : '记录';
@@ -277,9 +280,9 @@ export function TableRecordsPage() {
             );
           })}
         </div>
-      </SectionCard>
+      </ContentSection>
 
-      <SectionCard className="mj-round-record-card" title="记录一手">
+      <FieldGroup className="mj-round-record-group" legend="记录一手">
         <div className="mj-chip-row">
           {[
             ['ron', '荣和'],
@@ -349,13 +352,13 @@ export function TableRecordsPage() {
         <ActionButton fullWidth icon={<Check aria-hidden="true" />} onClick={applyRecord}>
           写入流水
         </ActionButton>
-      </SectionCard>
+      </FieldGroup>
 
       <Alert icon={<AlertCircle aria-hidden="true" />} tone={totalScore === 100000 ? 'success' : 'warning'} title="总点校验">
         当前玩家合计 {totalScore.toLocaleString('zh-CN')} 点。
       </Alert>
 
-      <SectionCard className="mj-history-card" title="历史流水">
+      <ContentSection className="mj-history-section" title="历史流水">
         <DataTable
           columns={[
             { id: 'meta', header: '局' },
@@ -365,7 +368,7 @@ export function TableRecordsPage() {
           rows={history.map((item) => ({ id: item.id, meta: item.meta, title: item.title, delta: item.delta }))}
           rowKey={(row) => String(row.id)}
         />
-      </SectionCard>
+      </ContentSection>
 
       <div className="mj-button-row mj-button-row--two">
         <ActionButton className="mj-record-white-action" disabled={history.length === 0} icon={<RotateCcw aria-hidden="true" />} variant="ghost" onClick={undo}>
@@ -531,7 +534,7 @@ export function HandRecognitionPage() {
         </label>
       </div>
 
-      <SectionCard className="mj-recognition-preview-card">
+      <SurfacePanel aria-label="手牌照片预览" className="mj-recognition-preview">
         <div className={imageDataUrl ? 'mj-scan-preview mj-scan-preview--image' : 'mj-scan-preview mj-scan-preview--empty'}>
           {imageDataUrl ? (
             <div className="mj-recognition-image-wrap">
@@ -564,7 +567,7 @@ export function HandRecognitionPage() {
             </span>
           ) : null}
         </div>
-      </SectionCard>
+      </SurfacePanel>
 
       {statusAlert ? (
         <Alert icon={status === 'recognizing' ? <LoaderCircle aria-hidden="true" /> : <AlertCircle aria-hidden="true" />} tone={statusAlert.tone} title={statusAlert.title}>
@@ -572,7 +575,7 @@ export function HandRecognitionPage() {
         </Alert>
       ) : null}
 
-      <SectionCard className="mj-recognition-result-card" title="最终牌序">
+      <ContentSection className="mj-recognition-result-section" title="最终牌序">
         {selectedCandidateTiles.length > 0 ? (
           <div aria-label="识别候选牌" className="mj-recognition-candidates">
             {selectedCandidateTiles.map((candidate) => {
@@ -613,7 +616,7 @@ export function HandRecognitionPage() {
         <ActionButton disabled={tiles.length === 0} fullWidth icon={<Sparkles aria-hidden="true" />} onClick={importToScore}>
           {scoreTarget === 'legacy-score' ? '带入古役算分' : '带入快速算分'}
         </ActionButton>
-      </SectionCard>
+      </ContentSection>
 
       {warnings.length > 0 ? (
         <div className="mj-recognition-warning-list">
@@ -666,7 +669,7 @@ export function TileKeyboardDemoPage() {
 
   return (
     <div className="mj-page-stack mj-keyboard-demo-page">
-      <SectionCard title="手牌预览">
+      <ContentSection title="手牌预览">
         <TileStrip
           emptyLabel="点击下方牌面输入"
           maxSlots={14}
@@ -674,14 +677,13 @@ export function TileKeyboardDemoPage() {
           tiles={tiles}
           onRemove={(index) => setTiles(tiles.filter((_, currentIndex) => currentIndex !== index))}
         />
-      </SectionCard>
+      </ContentSection>
       {tiles.length >= 14 ? (
         <Alert icon={<AlertCircle aria-hidden="true" />} tone="warning" title="最大张数限制">
           当前目标最多 14 张，请删除一张后再继续输入。
         </Alert>
       ) : null}
-      <section className="mj-inline-keyboard" aria-label="牌输入键盘">
-        <h2>选择手牌 {tiles.length}/14</h2>
+      <FieldGroup className="mj-inline-keyboard" legend={`选择手牌 ${tiles.length}/14`}>
         <SegmentedControl
           ariaLabel="选择花色"
           options={[
@@ -720,7 +722,7 @@ export function TileKeyboardDemoPage() {
             复制
           </ActionButton>
         </div>
-      </section>
+      </FieldGroup>
       {message ? <Alert tone="success">{message}</Alert> : null}
     </div>
   );
@@ -729,11 +731,12 @@ export function TileKeyboardDemoPage() {
 export function DesignedPlaceholderPage({ navigate }: PageProps) {
   return (
     <div className="mj-page-stack mj-placeholder-designed-page">
-      <SectionCard title="没有匹配的页面">
-        <Alert icon={<AlertCircle aria-hidden="true" />} tone="warning">
-          当前入口没有绑定到可用功能，请返回快速算分或选择其他底部功能。
-        </Alert>
-      </SectionCard>
+      <PlaceholderPanel
+        description="当前入口没有绑定到可用功能，请返回快速算分或选择其他底部功能。"
+        icon={<AlertCircle aria-hidden="true" />}
+        statusLabel="未找到"
+        title="没有匹配的页面"
+      />
       <ActionButton fullWidth icon={<Home aria-hidden="true" />} onClick={() => navigate('quick-score')}>
         返回快速算分
       </ActionButton>

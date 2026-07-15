@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
-import { AppFrame, SectionCard, TopNav } from '../index';
+import { AppFrame, ContentSection, TopNav } from '../index';
 
 const meta = {
   title: 'Components/Layout/AppFrame',
@@ -17,9 +17,9 @@ export const Default: Story = {
       nav={<TopNav title="日麻点数工具" subtitle="组件预览" />}
       footer={<span>本地 Storybook 组件目录</span>}
     >
-      <SectionCard title="页面内容" description="AppFrame 统一承载顶部导航、主体和页脚。">
+      <ContentSection title="页面内容" description="AppFrame 统一承载顶部导航、主体和页脚。">
         <p>页面模块放在这里。</p>
-      </SectionCard>
+      </ContentSection>
     </AppFrame>
   ),
 };

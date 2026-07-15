@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, userEvent, within } from 'storybook/test';
 
 import { AppScreen } from '../../AppScreen';
-import { createPageStoryArgs, expectNoPrimaryHeader, pageStoryParameters } from './storySupport';
+import { assertFlatSurfaceHierarchy, createPageStoryArgs, expectNoPrimaryHeader, pageStoryParameters } from './storySupport';
 
 const meta = {
   title: 'Pages/Records',
@@ -18,7 +18,8 @@ export const TableRecords: Story = {
   args: { page: 'table-records' },
   play: async ({ canvasElement }) => {
     await expectNoPrimaryHeader(canvasElement);
-    await expect(within(canvasElement).getByRole('heading', { name: '记录一手' })).toBeInTheDocument();
+    await expect(within(canvasElement).getByRole('group', { name: '记录一手' })).toBeInTheDocument();
+    await assertFlatSurfaceHierarchy(canvasElement);
   },
 };
 
@@ -29,6 +30,7 @@ export const TableRecordsWithHistory: Story = {
     await userEvent.click(canvas.getByRole('button', { name: '写入流水' }));
     await expect(canvas.getByText('南家 荣和 西家')).toBeInTheDocument();
     await expect(canvas.getByRole('button', { name: '撤销上一条' })).toBeEnabled();
+    await assertFlatSurfaceHierarchy(canvasElement);
   },
 };
 
@@ -37,6 +39,7 @@ export const HandRecognition: Story = {
   play: async ({ canvasElement }) => {
     await expectNoPrimaryHeader(canvasElement);
     await expect(within(canvasElement).getByText('导入照片后在本地预览')).toBeInTheDocument();
+    await assertFlatSurfaceHierarchy(canvasElement);
   },
 };
 
@@ -46,5 +49,6 @@ export const HandRecognitionKeyboardOpen: Story = {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole('button', { name: '打开牌键盘修正' }));
     await expect(await canvas.findByRole('dialog', { name: '修正实体手牌' })).toBeInTheDocument();
+    await assertFlatSurfaceHierarchy(canvasElement);
   },
 };

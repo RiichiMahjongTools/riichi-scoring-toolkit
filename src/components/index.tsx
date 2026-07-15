@@ -4,7 +4,6 @@ import {
   Clipboard,
   Copy,
   Mail,
-  MessageCircle,
   Minus,
   Plus,
   RotateCcw,
@@ -17,6 +16,7 @@ import {
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type {
   ButtonHTMLAttributes,
+  FieldsetHTMLAttributes,
   FormEvent,
   HTMLAttributes,
   ReactNode,
@@ -25,6 +25,7 @@ import type {
 import '../components.css';
 
 type Tone = 'default' | 'success' | 'warning' | 'danger' | 'info';
+export type SurfaceTone = 'neutral' | 'success' | 'warning' | 'danger' | 'info';
 type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'gold';
 type ButtonSize = 'sm' | 'md';
 type TileSuitId = 'm' | 'p' | 's' | 'z';
@@ -201,45 +202,136 @@ export function BottomTabBar<T extends string = string>({
   );
 }
 
-export interface SectionCardProps extends Omit<HTMLAttributes<HTMLElement>, 'title'> {
+export interface ContentSectionProps extends Omit<HTMLAttributes<HTMLElement>, 'title'> {
   eyebrow?: ReactNode;
   title?: ReactNode;
   description?: ReactNode;
   actions?: ReactNode;
   footer?: ReactNode;
-  tone?: Tone;
   density?: 'default' | 'compact';
+  separator?: 'none' | 'top';
 }
 
-export function SectionCard({
+export function ContentSection({
   eyebrow,
   title,
   description,
   actions,
   footer,
-  tone = 'default',
+  density = 'default',
+  separator = 'none',
+  children,
+  className,
+  ...props
+}: ContentSectionProps) {
+  const headingId = useId();
+
+  return (
+    <section
+      aria-labelledby={title ? headingId : undefined}
+      className={cx(
+        'mj-content-section',
+        `mj-content-section--${density}`,
+        separator === 'top' && 'mj-content-section--separated',
+        className,
+      )}
+      {...props}
+    >
+      {(eyebrow || title || description || actions) ? (
+        <div className="mj-content-section__header">
+          <div className="mj-content-section__heading">
+            {eyebrow ? <p className="mj-eyebrow">{eyebrow}</p> : null}
+            {title ? <h2 id={headingId}>{title}</h2> : null}
+            {description ? <p>{description}</p> : null}
+          </div>
+          {actions ? <div className="mj-content-section__actions">{actions}</div> : null}
+        </div>
+      ) : null}
+      {children ? <div className="mj-content-section__body">{children}</div> : null}
+      {footer ? <div className="mj-content-section__footer">{footer}</div> : null}
+    </section>
+  );
+}
+
+export interface FieldGroupProps extends Omit<FieldsetHTMLAttributes<HTMLFieldSetElement>, 'title'> {
+  legend: ReactNode;
+  legendVisibility?: 'visible' | 'sr-only';
+  description?: ReactNode;
+  actions?: ReactNode;
+  density?: 'default' | 'compact';
+}
+
+export function FieldGroup({
+  legend,
+  legendVisibility = 'visible',
+  description,
+  actions,
   density = 'default',
   children,
   className,
   ...props
-}: SectionCardProps) {
+}: FieldGroupProps) {
   return (
-    <section
-      className={cx('mj-section-card', `mj-section-card--${tone}`, `mj-section-card--${density}`, className)}
-      {...props}
-    >
-      {(eyebrow || title || description || actions) ? (
-        <div className="mj-section-card__header">
-          <div className="mj-section-card__heading">
-            {eyebrow ? <p className="mj-eyebrow">{eyebrow}</p> : null}
-            {title ? <h2>{title}</h2> : null}
-            {description ? <p>{description}</p> : null}
-          </div>
-          {actions ? <div className="mj-section-card__actions">{actions}</div> : null}
+    <fieldset className={cx('mj-field-group', `mj-field-group--${density}`, className)} {...props}>
+      <legend
+        className={cx(
+          'mj-field-group__legend',
+          legendVisibility === 'sr-only' && 'mj-field-group__legend--sr-only',
+        )}
+      >
+        {legend}
+      </legend>
+      {(description || actions) ? (
+        <div className="mj-field-group__meta">
+          {description ? <p>{description}</p> : null}
+          {actions ? <div className="mj-field-group__actions">{actions}</div> : null}
         </div>
       ) : null}
-      {children ? <div className="mj-section-card__body">{children}</div> : null}
-      {footer ? <div className="mj-section-card__footer">{footer}</div> : null}
+      {children ? <div className="mj-field-group__body">{children}</div> : null}
+    </fieldset>
+  );
+}
+
+export interface SurfacePanelProps extends Omit<HTMLAttributes<HTMLElement>, 'title'> {
+  title?: ReactNode;
+  description?: ReactNode;
+  actions?: ReactNode;
+  footer?: ReactNode;
+  tone?: SurfaceTone;
+  density?: 'default' | 'compact';
+}
+
+export function SurfacePanel({
+  title,
+  description,
+  actions,
+  footer,
+  tone = 'neutral',
+  density = 'default',
+  children,
+  className,
+  ...props
+}: SurfacePanelProps) {
+  const headingId = useId();
+
+  return (
+    <section
+      aria-labelledby={title ? headingId : undefined}
+      className={cx('mj-surface-panel', `mj-surface-panel--${tone}`, `mj-surface-panel--${density}`, className)}
+      data-ui-surface="surface-panel"
+      {...props}
+    >
+      {(title || description || actions) ? (
+        <div className="mj-surface-panel__header">
+          <div className="mj-surface-panel__heading">
+            {title ? <h2 id={headingId}>{title}</h2> : null}
+            {description ? <p>{description}</p> : null}
+          </div>
+          {actions ? <div className="mj-surface-panel__actions">{actions}</div> : null}
+        </div>
+      ) : null}
+      {children}
+      {footer ? <div className="mj-surface-panel__footer">{footer}</div> : null}
     </section>
   );
 }
@@ -453,7 +545,7 @@ export function CounterControl({
   );
 }
 
-export interface AlertProps extends Omit<HTMLAttributes<HTMLDivElement>, 'title'> {
+export interface AlertProps extends Omit<HTMLAttributes<HTMLElement>, 'title'> {
   tone?: Exclude<Tone, 'default'>;
   title?: ReactNode;
   icon?: ReactNode;
@@ -461,9 +553,10 @@ export interface AlertProps extends Omit<HTMLAttributes<HTMLDivElement>, 'title'
 
 export function Alert({ tone = 'info', title, icon, children, className, ...props }: AlertProps) {
   return (
-    <div
+    <SurfacePanel
       className={cx('mj-alert', `mj-alert--${tone}`, className)}
       role={tone === 'danger' || tone === 'warning' ? 'alert' : 'status'}
+      tone={tone}
       {...props}
     >
       {icon ? <span className="mj-alert__icon">{icon}</span> : null}
@@ -471,40 +564,7 @@ export function Alert({ tone = 'info', title, icon, children, className, ...prop
         {title ? <strong>{title}</strong> : null}
         {children ? <p>{children}</p> : null}
       </div>
-    </div>
-  );
-}
-
-export interface FeatureCardProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'title'> {
-  title: ReactNode;
-  description?: ReactNode;
-  meta?: ReactNode;
-  badge?: ReactNode;
-  icon?: ReactNode;
-  tone?: Tone;
-}
-
-export function FeatureCard({
-  title,
-  description,
-  meta,
-  badge,
-  icon,
-  tone = 'default',
-  className,
-  type = 'button',
-  ...props
-}: FeatureCardProps) {
-  return (
-    <button className={cx('mj-feature-card', `mj-feature-card--${tone}`, className)} type={type} {...props}>
-      {icon ? <span className="mj-feature-card__icon">{icon}</span> : null}
-      <span className="mj-feature-card__content">
-        <strong>{title}</strong>
-        {description ? <span>{description}</span> : null}
-        {meta ? <small>{meta}</small> : null}
-      </span>
-      {badge ? <span className="mj-feature-card__badge">{badge}</span> : null}
-    </button>
+    </SurfacePanel>
   );
 }
 
@@ -674,8 +734,15 @@ export function MahjongTile({
     );
   }
 
+  const isAriaHidden = props['aria-hidden'] === true || props['aria-hidden'] === 'true';
+
   return (
-    <span aria-label={ariaLabel ?? meta.ariaLabel} className={tileClass} {...props}>
+    <span
+      aria-label={isAriaHidden ? undefined : ariaLabel ?? meta.ariaLabel}
+      className={tileClass}
+      role={isAriaHidden ? undefined : 'img'}
+      {...props}
+    >
       {content}
     </span>
   );
@@ -1065,33 +1132,7 @@ export function HanFuSelector({
   );
 }
 
-export interface MetricStatCardProps extends HTMLAttributes<HTMLDivElement> {
-  label: ReactNode;
-  value: ReactNode;
-  caption?: ReactNode;
-  tone?: Tone;
-}
-
-export function MetricStatCard({
-  label,
-  value,
-  caption,
-  tone = 'default',
-  className,
-  ...props
-}: MetricStatCardProps) {
-  return (
-    <div className={cx('mj-metric-card', `mj-metric-card--${tone}`, className)} {...props}>
-      <span className="mj-metric-card__copy">
-        <strong>{label}</strong>
-        {caption ? <small>{caption}</small> : null}
-      </span>
-      <b className="mj-metric-card__value">{value}</b>
-    </div>
-  );
-}
-
-export interface PaymentCardItem {
+export interface StatListItem {
   id: string;
   label: ReactNode;
   value: ReactNode;
@@ -1099,23 +1140,84 @@ export interface PaymentCardItem {
   tone?: Tone;
 }
 
-export interface PaymentCardsProps extends HTMLAttributes<HTMLDivElement> {
-  items: PaymentCardItem[];
+export interface StatListProps extends HTMLAttributes<HTMLDListElement> {
+  items: StatListItem[];
+  dividers?: 'none' | 'between';
 }
 
-export function PaymentCards({ items, className, ...props }: PaymentCardsProps) {
+export function StatList({ items, dividers = 'none', className, ...props }: StatListProps) {
   return (
-    <div className={cx('mj-payment-cards', className)} {...props}>
+    <dl
+      className={cx('mj-stat-list', dividers === 'between' && 'mj-stat-list--divided', className)}
+      {...props}
+    >
       {items.map((item) => (
-        <MetricStatCard
-          key={item.id}
-          caption={item.caption}
-          label={item.label}
-          tone={item.tone}
-          value={item.value}
-        />
+        <div key={item.id} className={cx('mj-stat-list__item', `mj-stat-list__item--${item.tone ?? 'default'}`)}>
+          <dt className="mj-stat-list__copy">
+            <strong>{item.label}</strong>
+            {item.caption ? <small>{item.caption}</small> : null}
+          </dt>
+          <dd className="mj-stat-list__value">{item.value}</dd>
+        </div>
       ))}
-    </div>
+    </dl>
+  );
+}
+
+interface ActionListItemBase {
+  id: string;
+  title: ReactNode;
+  description?: ReactNode;
+  meta?: ReactNode;
+  badge?: ReactNode;
+  icon?: ReactNode;
+}
+
+export type ActionListItem =
+  | (ActionListItemBase & { kind: 'link'; href: string; onClick?: never; disabled?: never })
+  | (ActionListItemBase & { kind: 'button'; onClick: () => void; disabled?: boolean; href?: never })
+  | (ActionListItemBase & { kind: 'static'; href?: never; onClick?: never; disabled?: never });
+
+export interface ActionListProps extends Omit<HTMLAttributes<HTMLUListElement>, 'children'> {
+  items: ActionListItem[];
+  dividers?: 'none' | 'between';
+}
+
+export function ActionList({ items, dividers = 'none', className, ...props }: ActionListProps) {
+  const renderContent = (item: ActionListItem) => (
+    <>
+      {item.icon ? <span className="mj-action-list__icon">{item.icon}</span> : null}
+      <span className="mj-action-list__copy">
+        <strong>{item.title}</strong>
+        {item.meta ? <span>{item.meta}</span> : null}
+        {item.description ? <small>{item.description}</small> : null}
+      </span>
+      {item.badge ? <span className="mj-action-list__badge">{item.badge}</span> : null}
+    </>
+  );
+
+  return (
+    <ul
+      className={cx('mj-action-list', dividers === 'between' && 'mj-action-list--divided', className)}
+      {...props}
+    >
+      {items.map((item) => (
+        <li
+          key={item.id}
+          className={cx('mj-action-list__item', item.icon != null && 'mj-action-list__item--with-icon')}
+        >
+          {item.kind === 'link' ? (
+            <a className="mj-action-list__control" href={item.href}>{renderContent(item)}</a>
+          ) : item.kind === 'button' ? (
+            <button className="mj-action-list__control" disabled={item.disabled} type="button" onClick={item.onClick}>
+              {renderContent(item)}
+            </button>
+          ) : (
+            <div className="mj-action-list__control mj-action-list__control--static">{renderContent(item)}</div>
+          )}
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -1189,7 +1291,7 @@ export function DataTable<T extends Record<string, unknown>>({
   );
 }
 
-export interface PracticeAnswerPanelProps extends Omit<HTMLAttributes<HTMLDivElement>, 'title'> {
+export interface PracticeAnswerPanelProps extends Omit<HTMLAttributes<HTMLElement>, 'title'> {
   status: 'idle' | 'correct' | 'wrong';
   title?: ReactNode;
   streak?: number;
@@ -1216,41 +1318,47 @@ export function PracticeAnswerPanel({
     correct: { label: '回答正确', icon: <Check aria-hidden="true" /> },
     wrong: { label: '需要复盘', icon: <X aria-hidden="true" /> },
   }[status];
+  const surfaceTone: SurfaceTone = status === 'correct' ? 'success' : status === 'wrong' ? 'danger' : 'neutral';
 
   return (
-    <div className={cx('mj-practice-panel', `mj-practice-panel--${status}`, className)} {...props}>
-      <div className="mj-practice-panel__header">
-        <span className="mj-practice-panel__status">
+    <SurfacePanel
+      aria-live="polite"
+      actions={streak !== undefined ? <span className="mj-practice-panel__streak">{streak} 连正</span> : null}
+      className={cx('mj-practice-panel', `mj-practice-panel--${status}`, className)}
+      role="status"
+      title={
+        <span className="mj-practice-panel__title">
           {statusMeta.icon}
-          {statusMeta.label}
+          {title ?? statusMeta.label}
         </span>
-        {streak !== undefined ? <span className="mj-practice-panel__streak">{streak} 连正</span> : null}
-      </div>
-      {title ? <h3>{title}</h3> : null}
+      }
+      tone={surfaceTone}
+      {...props}
+    >
       {children ? <div className="mj-practice-panel__body">{children}</div> : null}
       {(userAnswer !== undefined || correctAnswer !== undefined) ? (
-        <div className="mj-practice-panel__answers">
+        <dl className="mj-practice-panel__answers">
           {userAnswer !== undefined ? (
             <div>
-              <span>您的答案</span>
-              <strong>{userAnswer}</strong>
+              <dt>您的答案</dt>
+              <dd>{userAnswer}</dd>
             </div>
           ) : null}
           {correctAnswer !== undefined ? (
             <div>
-              <span>标准答案</span>
-              <strong>{correctAnswer}</strong>
+              <dt>标准答案</dt>
+              <dd>{correctAnswer}</dd>
             </div>
           ) : null}
-        </div>
+        </dl>
       ) : null}
       {breakdown ? <div className="mj-practice-panel__breakdown">{breakdown}</div> : null}
       {actions ? <div className="mj-practice-panel__actions">{actions}</div> : null}
-    </div>
+    </SurfacePanel>
   );
 }
 
-export interface PlaceholderPanelProps extends Omit<HTMLAttributes<HTMLDivElement>, 'title'> {
+export interface PlaceholderPanelProps extends Omit<HTMLAttributes<HTMLElement>, 'title'> {
   title?: ReactNode;
   description?: ReactNode;
   statusLabel?: ReactNode;
@@ -1268,30 +1376,26 @@ export function PlaceholderPanel({
   ...props
 }: PlaceholderPanelProps) {
   return (
-    <div className={cx('mj-placeholder-panel', className)} {...props}>
+    <SurfacePanel
+      aria-label={typeof title === 'string' ? title : undefined}
+      className={cx('mj-placeholder-panel', className)}
+      role="status"
+      tone="warning"
+      {...props}
+    >
       <span className="mj-placeholder-panel__icon">{icon}</span>
       <span className="mj-placeholder-panel__status">{statusLabel}</span>
-      <h3>{title}</h3>
+      <h2>{title}</h2>
       {description ? <p>{description}</p> : null}
       {actions ? <div className="mj-placeholder-panel__actions">{actions}</div> : null}
-    </div>
+    </SurfacePanel>
   );
 }
 
-export interface ContactMethod {
-  id: string;
-  label: ReactNode;
-  value: ReactNode;
-  description?: ReactNode;
-  href?: string;
-  onClick?: () => void;
-  icon?: ReactNode;
-}
-
-export interface ContactPanelProps extends Omit<HTMLAttributes<HTMLDivElement>, 'title' | 'onSubmit'> {
+export interface ContactSectionProps extends Omit<HTMLAttributes<HTMLElement>, 'title' | 'onSubmit'> {
   title?: ReactNode;
   description?: ReactNode;
-  methods?: ContactMethod[];
+  methods?: ActionListItem[];
   feedbackValue?: string;
   feedbackPlaceholder?: string;
   onFeedbackChange?: (value: string) => void;
@@ -1299,7 +1403,7 @@ export interface ContactPanelProps extends Omit<HTMLAttributes<HTMLDivElement>, 
   submitLabel?: ReactNode;
 }
 
-export function ContactPanel({
+export function ContactSection({
   title = '联系反馈',
   description = '遇到规则疑问、页面问题或想补充资料，都可以从这里反馈。',
   methods = [],
@@ -1310,7 +1414,7 @@ export function ContactPanel({
   submitLabel = '提交反馈',
   className,
   ...props
-}: ContactPanelProps) {
+}: ContactSectionProps) {
   const textareaId = useId();
   const [draftFeedback, setDraftFeedback] = useState(feedbackValue);
   const isControlled = onFeedbackChange !== undefined;
@@ -1321,75 +1425,39 @@ export function ContactPanel({
   };
 
   return (
-    <div className={cx('mj-contact-panel', className)} {...props}>
-      <div className="mj-contact-panel__header">
-        <MessageCircle aria-hidden="true" />
-        <div>
-          <h3>{title}</h3>
-          {description ? <p>{description}</p> : null}
-        </div>
-      </div>
-
+    <ContentSection className={cx('mj-contact-section', className)} description={description} title={title} {...props}>
       {methods.length > 0 ? (
-        <div className="mj-contact-panel__methods">
-          {methods.map((method) => {
-            const content = (
-              <>
-                <span className="mj-contact-panel__method-icon">{method.icon ?? <Mail aria-hidden="true" />}</span>
-                <span>
-                  <strong>{method.label}</strong>
-                  <span>{method.value}</span>
-                  {method.description ? <small>{method.description}</small> : null}
-                </span>
-              </>
-            );
-
-            if (method.href) {
-              return (
-                <a key={method.id} className="mj-contact-panel__method" href={method.href}>
-                  {content}
-                </a>
-              );
-            }
-
-            if (method.onClick) {
-              return (
-                <button key={method.id} className="mj-contact-panel__method" type="button" onClick={method.onClick}>
-                  {content}
-                </button>
-              );
-            }
-
-            return (
-              <div key={method.id} className="mj-contact-panel__method">
-                {content}
-              </div>
-            );
-          })}
-        </div>
+        <ActionList
+          items={methods.map((method) => ({
+            ...method,
+            icon: method.icon ?? <Mail aria-hidden="true" />,
+          }))}
+        />
       ) : null}
 
       {onFeedbackChange || onSubmit ? (
-        <form className="mj-contact-panel__form" onSubmit={handleSubmit}>
-          <label htmlFor={textareaId}>反馈内容</label>
-          <textarea
-            id={textareaId}
-            placeholder={feedbackPlaceholder}
-            value={currentFeedback}
-            onChange={(event) => {
-              if (isControlled) {
-                onFeedbackChange?.(event.target.value);
-                return;
-              }
-              setDraftFeedback(event.target.value);
-            }}
-          />
-          <ActionButton disabled={!currentFeedback.trim()} icon={<Send aria-hidden="true" />} type="submit">
-            {submitLabel}
-          </ActionButton>
+        <form className="mj-contact-section__form" onSubmit={handleSubmit}>
+          <FieldGroup density="compact" legend="反馈内容" legendVisibility="sr-only">
+            <textarea
+              aria-label="反馈内容"
+              id={textareaId}
+              placeholder={feedbackPlaceholder}
+              value={currentFeedback}
+              onChange={(event) => {
+                if (isControlled) {
+                  onFeedbackChange?.(event.target.value);
+                  return;
+                }
+                setDraftFeedback(event.target.value);
+              }}
+            />
+            <ActionButton disabled={!currentFeedback.trim()} icon={<Send aria-hidden="true" />} type="submit">
+              {submitLabel}
+            </ActionButton>
+          </FieldGroup>
         </form>
       ) : null}
-    </div>
+    </ContentSection>
   );
 }
 
@@ -1406,20 +1474,18 @@ export interface ShareAction {
 export interface ShareBarProps extends HTMLAttributes<HTMLDivElement> {
   actions: ShareAction[];
   label?: ReactNode;
-  appearance?: 'panel' | 'plain';
   size?: ButtonSize;
 }
 
 export function ShareBar({
   actions,
   label = '分享与保存',
-  appearance = 'panel',
   size = 'sm',
   className,
   ...props
 }: ShareBarProps) {
   return (
-    <div className={cx('mj-share-bar', `mj-share-bar--${appearance}`, className)} {...props}>
+    <div className={cx('mj-share-bar', className)} {...props}>
       {label ? <span className="mj-share-bar__label">{label}</span> : null}
       <div className="mj-share-bar__actions" data-action-count={actions.length}>
         {actions.map((action) => (

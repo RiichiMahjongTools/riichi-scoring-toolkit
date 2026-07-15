@@ -1,11 +1,11 @@
-import { Clipboard, Copy, RotateCcw, Share2, SlidersHorizontal } from 'lucide-react';
+import { RotateCcw, Share2, SlidersHorizontal } from 'lucide-react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent, within } from 'storybook/test';
 
 import { ShareBar } from '../index';
 
 const meta = {
-  title: 'Components/Panels/ShareBar',
+  title: 'Components/Actions/ShareBar',
   component: ShareBar,
   args: {
     actions: [
@@ -13,7 +13,6 @@ const meta = {
       { id: 'modify', label: '修改', icon: <SlidersHorizontal aria-hidden="true" />, onClick: fn(), variant: 'ghost' },
       { id: 'share-result', label: '分享结果', icon: <Share2 aria-hidden="true" />, onClick: fn(), disabled: true, variant: 'primary' },
     ],
-    appearance: 'plain',
     label: null,
     size: 'md',
   },
@@ -29,18 +28,5 @@ export const Default: Story = {
     await userEvent.click(canvas.getByRole('button', { name: '清空' }));
     await expect(args.actions[0].onClick).toHaveBeenCalledOnce();
     await expect(canvas.getByRole('button', { name: '分享结果' })).toBeDisabled();
-  },
-};
-
-export const Panel: Story = {
-  args: {
-    actions: [
-      { id: 'copy-result', label: '复制结果', icon: <Copy aria-hidden="true" />, onClick: fn() },
-      { id: 'save-image', label: '保存图片', icon: <Clipboard aria-hidden="true" />, onClick: fn() },
-      { id: 'share', label: '分享', icon: <Share2 aria-hidden="true" />, onClick: fn(), variant: 'primary' },
-    ],
-    appearance: 'panel',
-    label: '分享与保存',
-    size: 'sm',
   },
 };

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, userEvent, within } from 'storybook/test';
 
-import { HanFuSelector, SectionCard } from '../index';
+import { FieldGroup, HanFuSelector } from '../index';
 
 const calculatorHanOptions = [1, 2, 3, 4, 5];
 const calculatorFuOptions = [20, 25, 30, 40, 50];
@@ -11,7 +11,7 @@ function CalculatorSelectorExample({ disabledFuValues = [] }: { disabledFuValues
   const [han, setHan] = useState(3);
   const [fu, setFu] = useState(40);
   return (
-    <SectionCard title="选择番数与符数">
+    <FieldGroup legend="选择番数与符数">
       <HanFuSelector
         disabledFuValues={disabledFuValues}
         fu={fu}
@@ -22,7 +22,7 @@ function CalculatorSelectorExample({ disabledFuValues = [] }: { disabledFuValues
         onFuChange={setFu}
         onHanChange={setHan}
       />
-    </SectionCard>
+    </FieldGroup>
   );
 }
 

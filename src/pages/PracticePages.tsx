@@ -5,10 +5,12 @@ import {
   ActionButton,
   Alert,
   Chip,
+  ContentSection,
   DataTable,
+  FieldGroup,
   MahjongTile,
   PracticeAnswerPanel,
-  SectionCard,
+  SurfacePanel,
   TileStrip,
 } from '../components';
 import {
@@ -145,13 +147,18 @@ export function ChinitsuPracticePage() {
 
   return (
     <div className="mj-page-stack mj-practice-design mj-chinitsu-page">
-      <SectionCard className="mj-practice-hand-card mj-chinitsu-hand-card" title="清一色手牌">
+      <ContentSection aria-label="清一色题面手牌" className="mj-practice-hand-section mj-chinitsu-hand-section">
         <TileStrip tileSize="xs" tiles={question.handTiles.map(tileToCode)} />
-      </SectionCard>
+      </ContentSection>
 
       {feedback ? (
-        <section className={feedback.correct ? 'mj-practice-result-compact mj-practice-result-compact--success mj-chinitsu-result-card' : 'mj-practice-result-compact mj-practice-result-compact--danger mj-chinitsu-result-card'}>
-          <h2>{feedback.correct ? '本题连对 +1' : '本题需要复盘'}</h2>
+        <SurfacePanel
+          aria-live="polite"
+          className={feedback.correct ? 'mj-practice-result-compact mj-practice-result-compact--success mj-chinitsu-result' : 'mj-practice-result-compact mj-practice-result-compact--danger mj-chinitsu-result'}
+          role="status"
+          title={feedback.correct ? '本题连对 +1' : '本题需要复盘'}
+          tone={feedback.correct ? 'success' : 'danger'}
+        >
           <div className="mj-chinitsu-feedback-list">
             <div className="mj-chinitsu-feedback-row">
               <span>正确答案</span>
@@ -170,10 +177,10 @@ export function ChinitsuPracticePage() {
               </div>
             </div>
           </div>
-        </section>
+        </SurfacePanel>
       ) : null}
 
-      <SectionCard title="选择全部听牌 / 有效和牌">
+      <FieldGroup legend="选择全部听牌 / 有效和牌">
         <div className="mj-chinitsu-answer-grid">
           {question.candidateRanks.map((rank) => {
             const selected = selectedRanks.includes(rank);
@@ -202,7 +209,7 @@ export function ChinitsuPracticePage() {
             );
           })}
         </div>
-      </SectionCard>
+      </FieldGroup>
 
       {feedback ? (
         <ActionButton fullWidth icon={<Sparkles aria-hidden="true" />} onClick={nextQuestion}>
@@ -253,16 +260,16 @@ export function FuPracticePage() {
 
   return (
     <div className="mj-page-stack mj-practice-design mj-fu-practice-page">
-      <SectionCard className="mj-practice-hand-card" title="题面手牌">
+      <ContentSection aria-label="题面手牌" className="mj-practice-hand-section">
         <PracticeHandScene handGroups={question.handGroups} />
         <div className="mj-practice-hand-meta">
           <Chip selected>{formatWinMethod(question.winMethod)}</Chip>
           <Chip selected>{WIND_LABELS[question.roundWind]}场{WIND_LABELS[question.seatWind]}家</Chip>
           {question.visibleConditions.map((condition) => <Chip key={condition} selected>{condition}</Chip>)}
         </div>
-      </SectionCard>
+      </ContentSection>
 
-      <SectionCard title="选择最终符数">
+      <FieldGroup legend="选择最终符数">
         <div className="mj-fu-answer-grid">
           {FU_PRACTICE_OPTIONS.map((fu) => {
             const isSelected = answerFu === fu;
@@ -288,14 +295,21 @@ export function FuPracticePage() {
             );
           })}
         </div>
-      </SectionCard>
+      </FieldGroup>
 
       {feedback ? (
-        <section className={feedback.correct ? 'mj-fu-breakdown-panel mj-fu-breakdown-panel--correct' : 'mj-fu-breakdown-panel mj-fu-breakdown-panel--wrong'}>
-          <h2>
+        <SurfacePanel
+          aria-live="polite"
+          className={feedback.correct ? 'mj-fu-breakdown mj-fu-breakdown--correct' : 'mj-fu-breakdown mj-fu-breakdown--wrong'}
+          role="status"
+          title={
+            <>
             {feedback.correct ? <Check aria-hidden="true" /> : <X aria-hidden="true" />}
             {feedback.correct ? '回答正确' : `回答错误 · 标准答案 ${feedback.correctAnswer} 符`}
-          </h2>
+            </>
+          }
+          tone={feedback.correct ? 'success' : 'danger'}
+        >
           <DataTable
             columns={[
               { id: 'item', header: '拆解' },
@@ -314,7 +328,7 @@ export function FuPracticePage() {
               下一题
             </ActionButton>
           </div>
-        </section>
+        </SurfacePanel>
       ) : null}
       <RandomQuestionButton onClick={randomQuestion} />
     </div>
@@ -495,7 +509,7 @@ export function PointPracticePage() {
 
   return (
     <div className="mj-page-stack mj-practice-design mj-point-practice-page">
-      <SectionCard aria-label="题面手牌" className="mj-practice-hand-card mj-point-hand-card">
+      <ContentSection aria-label="题面手牌" className="mj-practice-hand-section mj-point-hand-section">
         <PracticeHandScene handGroups={question.handGroups} />
         <div className="mj-practice-hand-meta">
           <Chip selected>{question.seatWind === 'east' ? '亲家' : '闲家'}</Chip>
@@ -503,9 +517,9 @@ export function PointPracticePage() {
           <Chip selected>{WIND_LABELS[question.roundWind]}场{WIND_LABELS[question.seatWind]}家</Chip>
           {question.visibleConditions.map((condition) => <Chip key={condition} selected>{condition}</Chip>)}
         </div>
-      </SectionCard>
+      </ContentSection>
 
-      <SectionCard title="输入总获得点数">
+      <FieldGroup legend="输入总获得点数">
         <input
           className="mj-point-answer-input"
           inputMode="numeric"
@@ -520,9 +534,9 @@ export function PointPracticePage() {
         <ActionButton disabled={!draft || Boolean(feedback)} fullWidth icon={<Check aria-hidden="true" />} onClick={submit}>
           提交答案
         </ActionButton>
-      </SectionCard>
+      </FieldGroup>
 
-      <SectionCard className="mj-practice-lookup-card" title="番符点数表">
+      <ContentSection className="mj-practice-lookup-section" title="番符点数表">
         <div className="mj-practice-lookup-toggle">
           <ActionButton icon={<Eye aria-hidden="true" />} size="sm" variant="ghost" onClick={() => setShowLookup((value) => !value)}>
             {showLookup ? '隐藏查询表' : '显示查询表'}
@@ -539,7 +553,7 @@ export function PointPracticePage() {
             rowKey={(row) => String(row.id)}
           />
         ) : null}
-      </SectionCard>
+      </ContentSection>
 
       {feedback ? (
         <PracticeAnswerPanel
@@ -605,8 +619,8 @@ export function ComebackPracticePage() {
 
   return (
     <div className="mj-page-stack mj-practice-design mj-comeback-practice-page">
-      <section className="mj-comeback-sheet">
-        <div className="mj-comeback-sheet__body">
+      <FieldGroup className="mj-comeback-workspace" legend="逆转所需番符" legendVisibility="sr-only">
+        <div className="mj-comeback-workspace__body">
           <p className="mj-comeback-question">
             您的自风是<strong>{WIND_LABELS[question.userSeatWind]}</strong>，
             距离逆转需要<strong>{question.pointGap.toLocaleString('zh-CN')}点</strong>，
@@ -676,7 +690,7 @@ export function ComebackPracticePage() {
           </div>
         ) : null}
 
-        <footer className="mj-comeback-sheet__footer">
+        <div className="mj-comeback-workspace__footer">
           <ActionButton disabled={!isComplete || Boolean(feedback)} fullWidth icon={<Check aria-hidden="true" />} onClick={submit}>
             确认答案
           </ActionButton>
@@ -685,8 +699,8 @@ export function ComebackPracticePage() {
           }}>
             查看番符点数计算器
           </ActionButton>
-        </footer>
-      </section>
+        </div>
+      </FieldGroup>
       <RandomQuestionButton onClick={randomQuestion} />
     </div>
   );

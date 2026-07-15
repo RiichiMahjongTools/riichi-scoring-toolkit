@@ -6,10 +6,11 @@ import {
   Alert,
   Chip,
   CounterControl,
+  FieldGroup,
   MahjongTile,
-  SectionCard,
   SegmentedControl,
   ShareBar,
+  SurfacePanel,
   TileKeyboard,
   TileStrip,
 } from '../components';
@@ -428,32 +429,25 @@ function ScoreCalculatorPage({ variant }: { variant: ScorePageVariant }) {
     <div className={isLegacy ? 'mj-page-stack mj-quick-page mj-legacy-page' : 'mj-page-stack mj-quick-page'}>
       <QuickScorePanel computation={computation} seatWind={seatWind} />
 
-      <SectionCard
-        actions={<span>和牌张/最后摸切张 {handTiles.length}/{expectedClosedTiles}</span>}
-        className="mj-quick-hand-card"
+      <FieldGroup
+        actions={<span>{handTiles.length}/{expectedClosedTiles}</span>}
+        className="mj-quick-hand-group"
         density="compact"
-        title="手牌与副露"
+        legend="手牌与副露"
+        legendVisibility="sr-only"
       >
-        <div className="mj-quick-tile-row" aria-label="当前手牌与和牌张/最后摸切张">
-          {handTiles.length > 0 ? (
-            handTiles.map((tile, index) => {
-              const isWinning = index === selectedHandWinTileIndex;
-              return (
-                <MahjongTile
-                  key={`${tile}-${index}`}
-                  className={isWinning ? 'mj-tile--winning' : undefined}
-                  code={tile}
-                  marker={isWinning ? '和' : undefined}
-                  selected={isWinning}
-                  size="xs"
-                  onClick={() => selectHandWinTileIndex(index)}
-                />
-              );
-            })
-          ) : (
-            <span className="mj-muted-line">未录入手牌</span>
-          )}
-        </div>
+        <TileStrip
+          aria-label="当前手牌与和牌张/最后摸切张"
+          className="mj-quick-tile-row"
+          emptyLabel={null}
+          highlightIndex={selectedHandWinTileIndex}
+          maxSlots={expectedClosedTiles}
+          role="group"
+          tileActionLabel={(index, tileLabel) => `设第 ${index + 1} 张${tileLabel}为和牌张/最后摸切张`}
+          tileSize="xs"
+          tiles={handTiles}
+          onTileClick={selectHandWinTileIndex}
+        />
 
         {melds.length > 0 ? (
           <div className="mj-meld-list" aria-label="已录入副露面子">
@@ -536,7 +530,7 @@ function ScoreCalculatorPage({ variant }: { variant: ScorePageVariant }) {
             </ActionButton>
           </div>
         ) : null}
-      </SectionCard>
+      </FieldGroup>
 
       <div className="mj-quick-scan-entry">
         <ActionButton
@@ -550,7 +544,7 @@ function ScoreCalculatorPage({ variant }: { variant: ScorePageVariant }) {
         </ActionButton>
       </div>
 
-      <SectionCard density="compact" title="场况与规则">
+      <FieldGroup density="compact" legend="场况与规则" legendVisibility="sr-only">
         <RuleRow label="四麻 / 三麻">
           <Chip selected={mode === 'yonma'} size="sm" onClick={() => selectMode('yonma')}>四麻</Chip>
           <Chip selected={mode === 'sanma'} size="sm" onClick={() => selectMode('sanma')}>三麻</Chip>
@@ -595,9 +589,9 @@ function ScoreCalculatorPage({ variant }: { variant: ScorePageVariant }) {
           <Chip selected={!doubleWindPairTwoFu} size="sm" onClick={() => setDoubleWindPairTwoFu(false)}>4符</Chip>
           <Chip selected={doubleWindPairTwoFu} size="sm" onClick={() => setDoubleWindPairTwoFu(true)}>2符</Chip>
         </RuleRow>
-      </SectionCard>
+      </FieldGroup>
 
-      <SectionCard density="compact" title="额外役与修正">
+      <FieldGroup density="compact" legend="额外役与修正" legendVisibility="sr-only">
         <div className="mj-quick-extra-layout">
           <div className="mj-quick-chip-grid">
             {EXTRA_OPTIONS.map((option) => (
@@ -630,7 +624,7 @@ function ScoreCalculatorPage({ variant }: { variant: ScorePageVariant }) {
             ))}
           </div>
         </div>
-      </SectionCard>
+      </FieldGroup>
 
       {noYakuWarnings.length > 0 ? (
         <Alert icon={<AlertCircle aria-hidden="true" />} tone="danger" title="不能计分">
@@ -652,7 +646,7 @@ function ScoreCalculatorPage({ variant }: { variant: ScorePageVariant }) {
 
       <QuickEfficiencyPanel computation={computation} />
 
-      <ShareBar actions={quickActions} appearance="plain" label={null} size="md" />
+      <ShareBar actions={quickActions} label={null} size="md" />
 
       {copyMessage ? <Alert tone="success">{copyMessage}</Alert> : null}
 
@@ -700,11 +694,11 @@ function RuleRow({ label, children }: { label: string; children: React.ReactNode
 function QuickScorePanel({ computation, seatWind }: { computation: QuickComputation; seatWind: Wind }) {
   if (computation.kind === 'empty') {
     return (
-      <section className="mj-score-hero mj-score-hero--quick mj-score-hero--empty">
+      <SurfacePanel aria-live="polite" className="mj-score-hero mj-score-hero--quick mj-score-hero--empty" role="status">
         <span>最终点数</span>
         <strong>-</strong>
         <small>录入手牌、和牌方式和场况后显示计算结果</small>
-      </section>
+      </SurfacePanel>
     );
   }
 
@@ -717,7 +711,7 @@ function QuickScorePanel({ computation, seatWind }: { computation: QuickComputat
     const additionalPayment = result.cost ? result.cost.additional + result.cost.additional_bonus : undefined;
 
     return (
-      <section className="mj-score-hero mj-score-hero--quick">
+      <SurfacePanel aria-live="polite" className="mj-score-hero mj-score-hero--quick" role="status" tone="success">
         <span>最终点数</span>
         <strong>{value}</strong>
         <small>{seat}{method} · {formatHan(result.han)}{formatFu(result.fu)} · {formatLimit(result)}</small>
@@ -727,17 +721,17 @@ function QuickScorePanel({ computation, seatWind }: { computation: QuickComputat
           {result.is_tsumo && !result.is_dealer ? <b>庄家 {formatPoints(mainPayment).replace(' 点', '')}</b> : null}
           {result.is_tsumo && !result.is_dealer ? <b>子家 {formatPoints(additionalPayment).replace(' 点', '')}</b> : null}
         </div>
-      </section>
+      </SurfacePanel>
     );
   }
 
   if (computation.kind === 'efficiency') {
     return (
-      <section className="mj-score-hero mj-score-hero--quick mj-score-hero--empty">
+      <SurfacePanel aria-live="polite" className="mj-score-hero mj-score-hero--quick mj-score-hero--empty" role="status">
         <span>最终点数</span>
         <strong>-</strong>
         <small>当前牌姿未组成和牌，已转为向听与有效牌估算</small>
-      </section>
+      </SurfacePanel>
     );
   }
 
@@ -753,7 +747,7 @@ function QuickEfficiencyPanel({ computation }: { computation: QuickComputation }
   const countText = `${result.total_effective_tiles} 枚`;
 
   return (
-    <SectionCard density="compact" title="未和牌时">
+    <SurfacePanel aria-live="polite" density="compact" role="status" title="未和牌时" tone="info">
       <p className="mj-efficiency-title">{shantenText} · 有效牌 {countText}</p>
       <div className="mj-quick-tile-row">
         {effective_tiles.length > 0 ? (
@@ -764,7 +758,7 @@ function QuickEfficiencyPanel({ computation }: { computation: QuickComputation }
           <span className="mj-muted-line">没有可列出的有效牌</span>
         )}
       </div>
-    </SectionCard>
+    </SurfacePanel>
   );
 }
 

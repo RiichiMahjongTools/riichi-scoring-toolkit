@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, userEvent, within } from 'storybook/test';
 
 import { AppScreen } from '../../AppScreen';
-import { createPageStoryArgs, expectNoPrimaryHeader, pageStoryParameters } from './storySupport';
+import { assertFlatSurfaceHierarchy, createPageStoryArgs, expectNoPrimaryHeader, pageStoryParameters } from './storySupport';
 
 const meta = {
   title: 'Pages/Reference',
@@ -19,6 +19,7 @@ export const YakuList: Story = {
   play: async ({ canvasElement }) => {
     await expectNoPrimaryHeader(canvasElement);
     await expect(within(canvasElement).getByLabelText('役种筛选')).toBeInTheDocument();
+    await assertFlatSurfaceHierarchy(canvasElement);
   },
 };
 
@@ -30,6 +31,7 @@ export const YakuListYakumanFilter: Story = {
     await userEvent.click(yakuman);
     await expect(yakuman).toHaveAttribute('aria-pressed', 'true');
     await expect(canvas.getByRole('heading', { name: '役满' })).toBeInTheDocument();
+    await assertFlatSurfaceHierarchy(canvasElement);
   },
 };
 
@@ -39,6 +41,7 @@ export const HanFuTable: Story = {
     const canvas = within(canvasElement);
     await expectNoPrimaryHeader(canvasElement);
     await expect(canvas.getByRole('table')).toBeInTheDocument();
+    await assertFlatSurfaceHierarchy(canvasElement);
   },
 };
 
@@ -47,6 +50,7 @@ export const FuHelp: Story = {
   play: async ({ canvasElement }) => {
     await expectNoPrimaryHeader(canvasElement);
     await expect(within(canvasElement).getByRole('heading', { name: '计算顺序' })).toBeInTheDocument();
+    await assertFlatSurfaceHierarchy(canvasElement);
   },
 };
 
@@ -55,5 +59,6 @@ export const PointHelp: Story = {
   play: async ({ canvasElement }) => {
     await expectNoPrimaryHeader(canvasElement);
     await expect(within(canvasElement).getByRole('heading', { name: '点数计算步骤' })).toBeInTheDocument();
+    await assertFlatSurfaceHierarchy(canvasElement);
   },
 };

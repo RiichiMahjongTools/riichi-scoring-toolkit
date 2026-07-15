@@ -1,7 +1,7 @@
 import { Calculator, Copy, Mail } from 'lucide-react';
 import { useState } from 'react';
 
-import { ActionButton, Alert, ContactPanel, PlaceholderPanel, SectionCard } from '../components';
+import { ActionButton, Alert, ContactSection, PlaceholderPanel, SurfacePanel } from '../components';
 import { PAGE_TITLES, type PageId } from './pageModel';
 import type { PageProps } from './shared';
 
@@ -24,11 +24,9 @@ export function SafePlaceholderPage({ page, navigate }: PageProps & { page: Page
           </>
         }
       />
-      <SectionCard title="安全说明">
-        <Alert tone="info">
-          本页不会创建账号、发送数据、展示广告、引导支付或开放会员功能；只作为后续需求确认入口。
-        </Alert>
-      </SectionCard>
+      <Alert title="安全说明" tone="info">
+        本页不会创建账号、发送数据、展示广告、引导支付或开放会员功能；只作为后续需求确认入口。
+      </Alert>
     </div>
   );
 }
@@ -54,13 +52,15 @@ export function ContactPage() {
 
   return (
     <div className="mj-page-stack">
-      <ContactPanel
+      <ContactSection
+        aria-label="联系反馈"
         feedbackValue={feedback}
         methods={[
           {
             id: 'local',
-            label: '本地反馈',
-            value: '当前页面记录',
+            kind: 'static',
+            title: '本地反馈',
+            meta: '当前页面记录',
             description: '提交后只在本机页面显示已记录提示，不会联网发送。',
             icon: <Mail aria-hidden="true" />,
           },
@@ -71,23 +71,24 @@ export function ContactPage() {
           setFeedback('');
           setCopied(false);
         }}
+        title={null}
       />
 
       {recorded ? (
-        <SectionCard title="已记录">
-          <Alert tone="success" title="反馈已在本地记录">
-            {recorded}
-          </Alert>
-          <ActionButton
-            fullWidth
-            icon={<Copy aria-hidden="true" />}
-            variant="secondary"
-            onClick={() => void copyLocalText(recorded, () => setCopied(true))}
-          >
-            复制反馈内容
-          </ActionButton>
+        <>
+          <SurfacePanel aria-live="polite" role="status" title="已记录" tone="success">
+            <p className="mj-muted-line">{recorded}</p>
+            <ActionButton
+              fullWidth
+              icon={<Copy aria-hidden="true" />}
+              variant="secondary"
+              onClick={() => void copyLocalText(recorded, () => setCopied(true))}
+            >
+              复制反馈内容
+            </ActionButton>
+          </SurfacePanel>
           {copied ? <Alert tone="success">已复制到剪贴板</Alert> : null}
-        </SectionCard>
+        </>
       ) : null}
     </div>
   );

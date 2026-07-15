@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, userEvent, within } from 'storybook/test';
 
 import { AppScreen } from '../../AppScreen';
-import { createPageStoryArgs, expectNoPrimaryHeader, pageStoryParameters } from './storySupport';
+import { assertFlatSurfaceHierarchy, createPageStoryArgs, expectNoPrimaryHeader, pageStoryParameters } from './storySupport';
 
 const meta = {
   title: 'Pages/Practice',
@@ -18,7 +18,8 @@ export const Chinitsu: Story = {
   args: { page: 'chinitsu' },
   play: async ({ canvasElement }) => {
     await expectNoPrimaryHeader(canvasElement);
-    await expect(within(canvasElement).getByRole('heading', { name: '清一色手牌' })).toBeInTheDocument();
+    await expect(within(canvasElement).getByRole('region', { name: '清一色题面手牌' })).toBeInTheDocument();
+    await assertFlatSurfaceHierarchy(canvasElement);
   },
 };
 
@@ -31,6 +32,7 @@ export const ChinitsuFeedback: Story = {
     await userEvent.click(choice!);
     await userEvent.click(canvas.getByRole('button', { name: '提交答案' }));
     await expect(canvas.getByRole('heading', { name: /本题/ })).toBeInTheDocument();
+    await assertFlatSurfaceHierarchy(canvasElement);
   },
 };
 
@@ -38,7 +40,8 @@ export const FuPractice: Story = {
   args: { page: 'fu-practice' },
   play: async ({ canvasElement }) => {
     await expectNoPrimaryHeader(canvasElement);
-    await expect(within(canvasElement).getByRole('heading', { name: '选择最终符数' })).toBeInTheDocument();
+    await expect(within(canvasElement).getByRole('group', { name: '选择最终符数' })).toBeInTheDocument();
+    await assertFlatSurfaceHierarchy(canvasElement);
   },
 };
 
@@ -48,7 +51,8 @@ export const FuPracticeFeedback: Story = {
     const choice = canvasElement.querySelector<HTMLButtonElement>('.mj-fu-choice');
     await expect(choice).toBeInTheDocument();
     await userEvent.click(choice!);
-    await expect(canvasElement.querySelector('.mj-fu-breakdown-panel')).toBeInTheDocument();
+    await expect(canvasElement.querySelector('.mj-fu-breakdown')).toBeInTheDocument();
+    await assertFlatSurfaceHierarchy(canvasElement);
   },
 };
 
@@ -56,7 +60,8 @@ export const PointPractice: Story = {
   args: { page: 'point-practice' },
   play: async ({ canvasElement }) => {
     await expectNoPrimaryHeader(canvasElement);
-    await expect(within(canvasElement).getByRole('heading', { name: '输入总获得点数' })).toBeInTheDocument();
+    await expect(within(canvasElement).getByRole('group', { name: '输入总获得点数' })).toBeInTheDocument();
+    await assertFlatSurfaceHierarchy(canvasElement);
   },
 };
 
@@ -67,6 +72,7 @@ export const PointPracticeFeedback: Story = {
     await userEvent.type(canvas.getByPlaceholderText('例如 7700'), '1000');
     await userEvent.click(canvas.getByRole('button', { name: '提交答案' }));
     await expect(canvasElement.querySelector('.mj-practice-panel')).toBeInTheDocument();
+    await assertFlatSurfaceHierarchy(canvasElement);
   },
 };
 
@@ -75,6 +81,7 @@ export const Comeback: Story = {
   play: async ({ canvasElement }) => {
     await expectNoPrimaryHeader(canvasElement);
     await expect(within(canvasElement).getByLabelText('逆转所需番符作答')).toBeInTheDocument();
+    await assertFlatSurfaceHierarchy(canvasElement);
   },
 };
 
@@ -91,5 +98,6 @@ export const ComebackFeedback: Story = {
     }
     await userEvent.click(canvas.getByRole('button', { name: '确认答案' }));
     await expect(canvasElement.querySelector('.mj-comeback-feedback')).toBeInTheDocument();
+    await assertFlatSurfaceHierarchy(canvasElement);
   },
 };

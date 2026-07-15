@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, userEvent, within } from 'storybook/test';
 
 import { AppScreen } from '../../AppScreen';
-import { createPageStoryArgs, expectPageTitle, pageStoryParameters } from './storySupport';
+import { assertFlatSurfaceHierarchy, createPageStoryArgs, expectPageTitle, pageStoryParameters } from './storySupport';
 
 const meta = {
   title: 'Pages/Utility',
@@ -22,6 +22,7 @@ export const Contact: Story = {
     await expect(canvas.getByLabelText('反馈内容')).toBeInTheDocument();
     await userEvent.click(canvas.getByRole('button', { name: '返回' }));
     await expect(args.onNavigate).toHaveBeenCalledWith('quick-score');
+    await assertFlatSurfaceHierarchy(canvasElement);
   },
 };
 
@@ -32,6 +33,7 @@ export const ContactSubmitted: Story = {
     await userEvent.type(canvas.getByLabelText('反馈内容'), 'Storybook 页面状态测试');
     await userEvent.click(canvas.getByRole('button', { name: '提交反馈' }));
     await expect(canvas.getByRole('heading', { name: '已记录' })).toBeInTheDocument();
+    await assertFlatSurfaceHierarchy(canvasElement);
   },
 };
 
@@ -39,7 +41,8 @@ export const TileKeyboardDemo: Story = {
   args: { page: 'tile-keyboard-demo' },
   play: async ({ canvasElement }) => {
     await expectPageTitle(canvasElement, '牌输入键盘');
-    await expect(within(canvasElement).getByRole('region', { name: '牌输入键盘' })).toBeInTheDocument();
+    await expect(within(canvasElement).getByRole('group', { name: /选择手牌/ })).toBeInTheDocument();
+    await assertFlatSurfaceHierarchy(canvasElement);
   },
 };
 
@@ -49,7 +52,8 @@ export const TileKeyboardWithTiles: Story = {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole('button', { name: '1万' }));
     await userEvent.click(canvas.getByRole('button', { name: '2万' }));
-    await expect(canvas.getByRole('heading', { name: '选择手牌 2/14' })).toBeInTheDocument();
+    await expect(canvas.getByRole('group', { name: '选择手牌 2/14' })).toBeInTheDocument();
+    await assertFlatSurfaceHierarchy(canvasElement);
   },
 };
 
@@ -58,5 +62,6 @@ export const Placeholder: Story = {
   play: async ({ canvasElement }) => {
     await expectPageTitle(canvasElement, '页面不可用');
     await expect(within(canvasElement).getByRole('heading', { name: '没有匹配的页面' })).toBeInTheDocument();
+    await assertFlatSurfaceHierarchy(canvasElement);
   },
 };

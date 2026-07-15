@@ -4,7 +4,7 @@ import { expect, userEvent, within } from 'storybook/test';
 
 import { AppScreen } from '../../AppScreen';
 import type { PageId } from '../pageModel';
-import { pageStoryParameters } from './storySupport';
+import { assertFlatSurfaceHierarchy, pageStoryParameters } from './storySupport';
 
 function NavigationHarness({ initialPage = 'quick-score' }: { initialPage?: PageId }) {
   const [page, setPage] = useState<PageId>(initialPage);
@@ -35,6 +35,7 @@ export const RemembersLastPagePerSection: Story = {
     await expect(canvas.getByRole('button', { name: '古役' })).toHaveAttribute('aria-current', 'page');
     await userEvent.click(canvas.getByRole('button', { name: '练习' }));
     await expect(canvas.getByRole('button', { name: '清一色' })).toHaveAttribute('aria-current', 'page');
+    await assertFlatSurfaceHierarchy(canvasElement);
   },
 };
 
@@ -47,5 +48,6 @@ export const SecondaryPageReturnsToQuickScore: Story = {
     await userEvent.click(canvas.getByRole('button', { name: '返回' }));
     await expect(canvasElement.querySelector('.mj-top-nav')).not.toBeInTheDocument();
     await expect(canvas.getByRole('button', { name: '快速算分' })).toHaveAttribute('aria-current', 'page');
+    await assertFlatSurfaceHierarchy(canvasElement);
   },
 };

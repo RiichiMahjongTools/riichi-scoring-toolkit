@@ -1,7 +1,7 @@
 import { AlertCircle } from 'lucide-react';
 import { useState } from 'react';
 
-import { Alert, Chip, DataTable, MahjongTile, SectionCard } from '../components';
+import { Alert, Chip, ContentSection, DataTable, MahjongTile } from '../components';
 import {
   FU_HELP_SECTIONS,
   POINT_HELP_SECTIONS,
@@ -58,7 +58,7 @@ export function YakuListPage() {
       </div>
 
       {groups.map((group) => (
-        <section key={group.category} className="mj-yaku-section-card">
+        <section key={group.category} className="mj-yaku-section">
           <h2>{group.title}</h2>
           {group.items.map((yaku) => (
             <article key={yaku.id} className="mj-yaku-list-row">
@@ -117,16 +117,16 @@ function HelpTable({ sections }: { sections: readonly HelpSection[] }) {
 export function FuHelpPage() {
   return (
     <div className="mj-page-stack mj-rules-help-page">
-      <SectionCard title="计算顺序">
+      <ContentSection title="计算顺序">
         <ol className="mj-check-list">
           <li>1. 先确认固定符：副底、门清荣和、自摸。</li>
           <li>2. 再加雀头、刻子、杠子、听牌形。</li>
           <li>3. 七对子固定25符，平和自摸按规则处理。</li>
           <li>4. 合计后向上取整到10符。</li>
         </ol>
-      </SectionCard>
+      </ContentSection>
 
-      <HelpDataCard
+      <HelpDataSection
         title="基础符表"
         columns={['类型', '符数', '说明']}
         rows={[
@@ -137,7 +137,7 @@ export function FuHelpPage() {
         ]}
       />
 
-      <HelpDataCard
+      <HelpDataSection
         title="雀头与听牌形"
         columns={['项目', '符数', '说明']}
         rows={[
@@ -149,7 +149,7 @@ export function FuHelpPage() {
         ]}
       />
 
-      <HelpDataCard
+      <HelpDataSection
         title="刻子 / 杠子"
         columns={['组合', '明刻', '暗刻', '明杠', '暗杠']}
         rows={[
@@ -158,9 +158,9 @@ export function FuHelpPage() {
         ]}
       />
 
-      <SectionCard title="典型例题">
+      <ContentSection title="典型例题">
         <p className="mj-help-example">门清荣和，役牌雀头，嵌张听牌：20 + 10 + 2 + 2 = 34，向上取整为 40 符。</p>
-      </SectionCard>
+      </ContentSection>
 
       <Alert icon={<AlertCircle aria-hidden="true" />} tone="warning" title="包牌 / 责任支付">
         役满责任支付属于点数分配规则，不直接改变符数。
@@ -172,16 +172,16 @@ export function FuHelpPage() {
 export function PointHelpPage() {
   return (
     <div className="mj-page-stack mj-rules-help-page">
-      <SectionCard title="点数计算步骤">
+      <ContentSection title="点数计算步骤">
         <ol className="mj-check-list">
           <li>1. 先得出番数与符数。</li>
           <li>2. 基本点 = 符 × 2^(番+2)。</li>
           <li>3. 按亲闲与荣和/自摸换算支付。</li>
           <li>4. 满贯以上直接使用固定点数。</li>
         </ol>
-      </SectionCard>
+      </ContentSection>
 
-      <HelpDataCard
+      <HelpDataSection
         title="亲闲支付"
         columns={['场景', '支付']}
         rows={[
@@ -192,7 +192,7 @@ export function PointHelpPage() {
         ]}
       />
 
-      <HelpDataCard
+      <HelpDataSection
         title="满贯以上固定点数"
         columns={['级别', '闲家荣和', '亲家荣和']}
         rows={[
@@ -204,14 +204,14 @@ export function PointHelpPage() {
         ]}
       />
 
-      <SectionCard title="典型例题">
+      <ContentSection title="典型例题">
         <p className="mj-help-example">闲家荣和 3番40符：基本点 40 × 2^5 = 1280，闲家荣和 ×4 = 5120，向上进位到 5200。</p>
-      </SectionCard>
+      </ContentSection>
     </div>
   );
 }
 
-function HelpDataCard({ title, columns, rows }: { title: string; columns: string[]; rows: string[][] }) {
+function HelpDataSection({ title, columns, rows }: { title: string; columns: string[]; rows: string[][] }) {
   const gridTemplateColumns =
     columns.length === 2
       ? '0.72fr 1.28fr'
@@ -220,7 +220,7 @@ function HelpDataCard({ title, columns, rows }: { title: string; columns: string
         : `repeat(${columns.length}, minmax(0, 1fr))`;
 
   return (
-    <SectionCard className="mj-help-data-card" title={title}>
+    <ContentSection className="mj-help-data-section" title={title}>
       <div className="mj-help-table" style={{ gridTemplateColumns } as CSSProperties}>
         {columns.map((column) => (
           <strong key={column}>{column}</strong>
@@ -233,6 +233,6 @@ function HelpDataCard({ title, columns, rows }: { title: string; columns: string
           )),
         )}
       </div>
-    </SectionCard>
+    </ContentSection>
   );
 }

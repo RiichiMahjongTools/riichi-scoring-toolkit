@@ -4,11 +4,12 @@ import { useMemo, useState } from 'react';
 import {
   ActionButton,
   Alert,
+  ContentSection,
   DataTable,
+  FieldGroup,
   HanFuSelector,
-  PaymentCards,
-  SectionCard,
   SegmentedControl,
+  StatList,
 } from '../components';
 import {
   STANDARD_HAN_VALUES,
@@ -141,7 +142,7 @@ export function HanFuCalculatorPage() {
 
   return (
     <div className="mj-page-stack mj-hanfu-calc-page">
-      <SectionCard title="选择番数与符数">
+      <FieldGroup legend="选择番数与符数" legendVisibility="sr-only">
         <HanFuSelector
           disabledFuValues={disabledFuValues}
           fu={fu}
@@ -152,9 +153,9 @@ export function HanFuCalculatorPage() {
           onFuChange={(value) => setFu(value as FuValue)}
           onHanChange={selectHan}
         />
-      </SectionCard>
+      </FieldGroup>
 
-      <PaymentCards items={paymentItems} />
+      <StatList aria-label="支付点数" dividers="between" items={paymentItems} />
     </div>
   );
 }
@@ -175,7 +176,7 @@ export function HanFuTablePage() {
         />
       </div>
 
-      <SectionCard className="mj-hanfu-table-card" title="四麻支付点数">
+      <ContentSection className="mj-hanfu-table-section" title="四麻支付点数">
         {showTable ? (
           <DataTable
             columns={[
@@ -191,7 +192,7 @@ export function HanFuTablePage() {
         ) : (
           <p className="mj-muted-line">查询表已隐藏。</p>
         )}
-      </SectionCard>
+      </ContentSection>
 
       <Alert icon={<TriangleAlert aria-hidden="true" />} tone="warning" title="不可组合">
         表格中的 -- 表示该番符组合不可直接出现或需按特殊规则处理。
