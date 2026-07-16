@@ -9,9 +9,11 @@ import {
   DataTable,
   FieldGroup,
   MahjongTile,
+  MeldTileGroup,
   PracticeAnswerPanel,
   SurfacePanel,
   TileStrip,
+  type MeldTileGroupKind,
 } from '../components';
 import {
   FU_PRACTICE_OPTIONS,
@@ -350,7 +352,9 @@ function makePointLookupRows(han: number, isDealer: boolean) {
   });
 }
 
-function isMeldPracticeGroup(group: PracticeHandGroup): boolean {
+type PracticeMeldGroup = PracticeHandGroup & { kind: MeldTileGroupKind };
+
+function isMeldPracticeGroup(group: PracticeHandGroup): group is PracticeMeldGroup {
   return group.kind === 'chi' || group.kind === 'pon' || group.kind === 'openKan' || group.kind === 'closedKan';
 }
 
@@ -364,25 +368,18 @@ function pointTileOrder(code: string): number {
 function PracticeHandTile({
   code,
   back = false,
-  sideways = false,
   floatingWinCode,
 }: {
   code?: string;
   back?: boolean;
-  sideways?: boolean;
   floatingWinCode?: string;
 }) {
-  const className = [
-    'mj-point-hand-tile-slot',
-    sideways && 'mj-point-hand-tile-slot--sideways',
-  ].filter(Boolean).join(' ');
-
   return (
-    <span className={className}>
+    <span className="mj-point-hand-tile-slot">
       {back ? (
         <span aria-label="牌背" className="mj-tile mj-tile--xs mj-point-hand-tile-back" />
       ) : code ? (
-        <MahjongTile className={sideways ? 'mj-point-hand-tile--sideways' : undefined} code={code} size="xs" />
+        <MahjongTile code={code} size="xs" />
       ) : null}
       {floatingWinCode ? (
         <span className="mj-point-hand-floating-win" aria-label="和牌">
@@ -395,38 +392,17 @@ function PracticeHandTile({
 
 function PracticeHandMeld({
   group,
-  groupIndex,
 }: {
-  group: PracticeHandGroup;
-  groupIndex: number;
+  group: PracticeMeldGroup;
 }) {
-  const isOpen = isMeldPracticeGroup(group);
-
   return (
-    <div
-      className={[
-        'mj-point-hand-meld',
-        isOpen && 'mj-point-hand-meld--open',
-        (group.kind === 'openKan' || group.kind === 'closedKan') && 'mj-point-hand-meld--kan',
-        group.kind === 'closedKan' && 'mj-point-hand-meld--closed-kan',
-        group.kind === 'pair' && 'mj-point-hand-meld--pair',
-      ].filter(Boolean).join(' ')}
-    >
-      <div className="mj-point-hand-meld__tiles">
-        {group.tiles.map((tile, tileIndex) => {
-          const isSideways = tileIndex === group.calledIndex;
-          const isBack = group.backIndexes?.includes(tileIndex) ?? false;
-          return (
-            <PracticeHandTile
-              key={`${groupIndex}-${tile}-${tileIndex}`}
-              code={tile}
-              back={isBack}
-              sideways={isSideways}
-            />
-          );
-        })}
-      </div>
-    </div>
+    <MeldTileGroup
+      calledTileIndex={group.calledIndex}
+      className="mj-point-hand-meld"
+      kind={group.kind}
+      size="xs"
+      tiles={group.tiles}
+    />
   );
 }
 
@@ -465,7 +441,7 @@ function PracticeHandScene({ handGroups }: { handGroups: readonly PracticeHandGr
       {meldGroups.length > 0 ? (
         <div className="mj-point-hand-scene__melds" aria-label="副露与杠">
           {meldGroups.map((group, index) => (
-            <PracticeHandMeld key={`meld-${index}`} group={group} groupIndex={index} />
+            <PracticeHandMeld key={`meld-${index}`} group={group} />
           ))}
         </div>
       ) : null}

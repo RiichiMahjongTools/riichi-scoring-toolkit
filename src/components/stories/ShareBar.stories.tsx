@@ -1,4 +1,4 @@
-import { RotateCcw, Share2, SlidersHorizontal } from 'lucide-react';
+import { History, RotateCcw } from 'lucide-react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent, within } from 'storybook/test';
 
@@ -9,9 +9,8 @@ const meta = {
   component: ShareBar,
   args: {
     actions: [
+      { id: 'legacy-mode', label: '古役模式', icon: <History aria-hidden="true" />, onClick: fn(), ariaPressed: false, variant: 'ghost' },
       { id: 'clear', label: '清空', icon: <RotateCcw aria-hidden="true" />, onClick: fn(), variant: 'ghost' },
-      { id: 'modify', label: '修改', icon: <SlidersHorizontal aria-hidden="true" />, onClick: fn(), variant: 'ghost' },
-      { id: 'share-result', label: '分享结果', icon: <Share2 aria-hidden="true" />, onClick: fn(), disabled: true, variant: 'primary' },
     ],
     label: null,
     size: 'md',
@@ -25,8 +24,9 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
   play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: '清空' }));
+    await userEvent.click(canvas.getByRole('button', { name: '古役模式' }));
     await expect(args.actions[0].onClick).toHaveBeenCalledOnce();
-    await expect(canvas.getByRole('button', { name: '分享结果' })).toBeDisabled();
+    await expect(canvas.getByRole('button', { name: '古役模式' })).toHaveAttribute('aria-pressed', 'false');
+    await expect(canvas.queryByRole('button', { name: '分享结果' })).not.toBeInTheDocument();
   },
 };

@@ -6,7 +6,12 @@ import {
   tilesTo34Array,
   type Tile,
 } from './tiles';
-import type { MeldInput, ScoreMode } from './validation';
+import {
+  expectedClosedTileCount,
+  isValidEfficiencyTileCount,
+  type MeldInput,
+  type ScoreMode,
+} from './validation';
 
 export interface EffectiveTile {
   tile: Tile;
@@ -32,6 +37,14 @@ export function calculateHandEfficiency(params: {
   melds?: readonly MeldInput[];
   warnings?: readonly string[];
 }): EfficiencyResult {
+  const meldCount = params.melds?.length ?? 0;
+  if (!isValidEfficiencyTileCount(params.handTiles.length, meldCount)) {
+    const completeTileCount = expectedClosedTileCount(meldCount);
+    throw new RangeError(
+      `牌数与副露数量不匹配：${meldCount} 组副露时，牌效计算需要 ${completeTileCount - 1} 或 ${completeTileCount} 张闭合手牌，当前 ${params.handTiles.length} 张`,
+    );
+  }
+
   const warnings = [...(params.warnings ?? [])];
 
   try {

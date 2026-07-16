@@ -19,7 +19,6 @@ function NavigationTabsPreview({
         items={[
           { id: 'quick-score', label: '快速算分' },
           { id: 'han-fu-calculator', label: '番符换算' },
-          { id: 'legacy-score', label: '古役' },
         ]}
         onSelect={onModuleSelect}
       />
@@ -58,11 +57,11 @@ export const Default: Story = {
     await expect(canvas.getByRole('navigation', { name: '主要功能' })).toBeInTheDocument();
     await expect(canvas.getByRole('button', { name: '番符换算' })).toHaveAttribute('aria-current', 'page');
     await expect(canvas.getByRole('button', { name: '算分' })).toHaveAttribute('aria-current', 'page');
-    await expect(canvas.getAllByRole('button')).toHaveLength(7);
+    await expect(canvas.getAllByRole('button')).toHaveLength(6);
 
-    await userEvent.click(canvas.getByRole('button', { name: '古役' }));
+    await userEvent.click(canvas.getByRole('button', { name: '快速算分' }));
     await userEvent.click(canvas.getByRole('button', { name: '练习' }));
-    await expect(args.onModuleSelect).toHaveBeenCalledWith('legacy-score');
+    await expect(args.onModuleSelect).toHaveBeenCalledWith('quick-score');
     await expect(args.onBottomSelect).toHaveBeenCalledWith('practice');
   },
 };

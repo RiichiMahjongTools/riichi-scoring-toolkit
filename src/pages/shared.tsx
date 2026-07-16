@@ -45,6 +45,12 @@ export function formatWinMethod(value: 'ron' | 'tsumo'): string {
   return value === 'tsumo' ? '自摸' : '荣和';
 }
 
+export function formatShanten(value: number): string {
+  if (value < 0) return '和牌';
+  if (value === 0) return '听牌';
+  return `${value} 向听`;
+}
+
 export function formatTableLimit(row: HanFuTableRow): ReactNode {
   if (!row.legal) return '通常不成立';
   return row.yaku_level_label ?? '普通';

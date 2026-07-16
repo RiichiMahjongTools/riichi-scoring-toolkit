@@ -13,7 +13,7 @@ describe('app navigation model', () => {
       id: section.id,
       pages: section.tabs.map((tab) => tab.page),
     }))).toEqual([
-      { id: 'score', pages: ['quick-score', 'han-fu-calculator', 'legacy-score'] },
+      { id: 'score', pages: ['quick-score', 'han-fu-calculator'] },
       { id: 'practice', pages: ['fu-practice', 'point-practice', 'chinitsu', 'comeback'] },
       { id: 'reference', pages: ['yaku-list', 'help-fu', 'help-points', 'han-fu-table'] },
       { id: 'tools', pages: ['table-records', 'hand-recognition'] },
@@ -24,6 +24,7 @@ describe('app navigation model', () => {
         expect(sectionForPage(tab.page)?.id).toBe(section.id);
       }
     }
+    expect(sectionForPage('legacy-score')?.id).toBe('score');
     expect(sectionForPage('contact')).toBeUndefined();
   });
 

@@ -1,5 +1,6 @@
-import { AlertCircle, Camera, Copy, Plus, RotateCcw, Share2, SlidersHorizontal, Sparkles, Trash2 } from 'lucide-react';
+import { AlertCircle, Camera, History, RotateCcw } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import type { CSSProperties } from 'react';
 
 import {
   ActionButton,
@@ -8,25 +9,27 @@ import {
   CounterControl,
   FieldGroup,
   MahjongTile,
-  SegmentedControl,
+  MeldTileGroup,
   ShareBar,
   SurfacePanel,
   TileKeyboard,
   TileStrip,
+  type QuickTileAction,
 } from '../components';
 import {
   DEFAULT_SCORE_CONDITIONS,
-  baseTileCode,
+  buildQuickEntryCandidates,
   calculateScoreOrEfficiency,
+  canUseTileCodes,
   createMeldInput,
   expectedClosedTileCount,
   getMeldKind,
-  getTileMeta,
   isTileCode,
   parseTileCodes,
   tileToCode,
   type MeldInput,
   type MeldKind,
+  type QuickEntryCandidate,
   type ScoreComputation,
   type ScoreConditions,
   type ScoreMode,
@@ -39,7 +42,7 @@ import {
   formatHan,
   formatLimit,
   formatPoints,
-  formatWinMethod,
+  formatShanten,
 } from './shared';
 import {
   applyScoreDraftTileImport,
@@ -50,15 +53,16 @@ import {
 } from './scoreDraft';
 
 type KeyboardTarget = 'hand' | 'dora' | 'ura' | 'meld';
-type QuickComputation = ScoreComputation | { kind: 'empty' };
+type QuickComputation =
+  | ScoreComputation
+  | { kind: 'empty' }
+  | { kind: 'incomplete'; current: number; expected: number; missing: number };
 type ScorePageVariant = 'quick' | 'legacy';
+type ScorePageTarget = 'quick-score' | 'legacy-score';
 
-const MELD_KIND_OPTIONS: Array<{ value: MeldKind; label: string; tiles: number }> = [
-  { value: 'chi', label: '吃', tiles: 3 },
-  { value: 'pon', label: '碰', tiles: 3 },
-  { value: 'openKan', label: '明杠', tiles: 4 },
-  { value: 'closedKan', label: '暗杠', tiles: 4 },
-];
+interface ScoreCalculatorPageProps {
+  onNavigate?: (page: ScorePageTarget) => void;
+}
 
 const MELD_KIND_LABELS: Record<MeldKind, string> = {
   chi: '吃',
@@ -66,6 +70,22 @@ const MELD_KIND_LABELS: Record<MeldKind, string> = {
   openKan: '明杠',
   closedKan: '暗杠',
   addedKan: '加杠',
+};
+
+interface EntryDraft {
+  target: KeyboardTarget;
+  handTiles: TileCode[];
+  winTileIndex: number | null;
+  melds: MeldInput[];
+  doraIndicators: TileCode[];
+  uraDoraIndicators: TileCode[];
+  editingMeldIndex: number | null;
+  meldPreviewTiles: TileCode[];
+}
+
+type EntrySlotStyle = CSSProperties & {
+  '--mj-entry-slot-count': number;
+  '--mj-entry-strip-max-width': string;
 };
 
 const WIND_OPTIONS: Array<{ value: Wind; label: string }> = [
@@ -98,6 +118,37 @@ const LEGACY_EVENT_OPTIONS: Array<{ key: keyof ScoreConditions; label: string; n
   { key: 'kanfuri', label: '杠振', note: '荣和他家杠后摸岭上牌再打出的牌，按 1 番' },
 ];
 
+function disabledConditionsForMelds(melds: readonly MeldInput[]): Set<keyof ScoreConditions> {
+  const disabled = new Set<keyof ScoreConditions>();
+  if (melds.length > 0) {
+    disabled.add('tenhou');
+    disabled.add('chiihou');
+    disabled.add('renhou');
+  }
+  if (melds.some((meld) => meld.opened)) {
+    disabled.add('doubleRiichi');
+    disabled.add('riichi');
+    disabled.add('ippatsu');
+    disabled.add('tsubameGaeshi');
+  }
+  return disabled;
+}
+
+function sanitizeConditionsForMelds(
+  conditions: ScoreConditions,
+  melds: readonly MeldInput[],
+): ScoreConditions {
+  const disabled = disabledConditionsForMelds(melds);
+  const invalidSelected = [...disabled].filter((key) => conditions[key]);
+  if (invalidSelected.length === 0) return conditions;
+
+  const next = { ...conditions };
+  invalidSelected.forEach((key) => {
+    next[key] = false;
+  });
+  return next;
+}
+
 function toTileCodes(values: string[]): TileCode[] {
   return values.filter(isTileCode);
 }
@@ -124,38 +175,16 @@ export function removeQuickScoreTileImport(hash: string): string {
   return `#/${page}${query ? `?${query}` : ''}`;
 }
 
-function hasFourPhysicalCopies(tile: string, currentTiles: string[]) {
-  if (!isTileCode(tile)) return true;
-  const base = baseTileCode(tile);
-  return currentTiles.filter((value) => isTileCode(value) && baseTileCode(value) === base).length >= 4;
+function entrySlotStyle(slotCount: number): EntrySlotStyle {
+  const normalizedCount = Math.max(1, slotCount);
+  return {
+    '--mj-entry-slot-count': normalizedCount,
+    '--mj-entry-strip-max-width': `${normalizedCount * 22 - 2}px`,
+  };
 }
 
-function meldTileLimit(kind: MeldKind): number {
-  return MELD_KIND_OPTIONS.find((option) => option.value === kind)?.tiles ?? 3;
-}
-
-function validateMeldDraft(kind: MeldKind, tiles: TileCode[], mode: ScoreMode): string {
-  const expected = meldTileLimit(kind);
-  if (mode === 'sanma' && kind === 'chi') return '三麻快速算分不支持吃牌';
-  if (tiles.length !== expected) return `${MELD_KIND_LABELS[kind]}需要选择 ${expected} 枚牌`;
-
-  const parsedTiles = parseTileCodes(tiles);
-  const baseCodes = tiles.map(baseTileCode);
-  const uniqueBaseCodes = new Set(baseCodes);
-
-  if (kind === 'chi') {
-    const metas = parsedTiles.map(getTileMeta);
-    const [first] = metas;
-    const ranks = metas.map((tile) => tile.rank).sort((a, b) => a - b);
-    const isSequence =
-      first.suit !== 'z' &&
-      metas.every((tile) => tile.suit === first.suit) &&
-      ranks[0] + 1 === ranks[1] &&
-      ranks[1] + 1 === ranks[2];
-    return isSequence ? '' : '吃牌必须是同一数牌花色的连续 3 枚';
-  }
-
-  return uniqueBaseCodes.size === 1 ? '' : `${MELD_KIND_LABELS[kind]}必须由相同牌组成`;
+function removeAt<T>(values: readonly T[], index: number): T[] {
+  return values.filter((_, currentIndex) => currentIndex !== index);
 }
 
 function normalizeWinTileIndex(length: number, expectedLength: number, index: number | null): number | null {
@@ -164,30 +193,15 @@ function normalizeWinTileIndex(length: number, expectedLength: number, index: nu
   return Math.min(Math.max(index, 0), length - 1);
 }
 
-async function copyResult(text: string, onDone: (message: string) => void) {
-  try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(text);
-      onDone('结果已复制到剪贴板');
-      return;
-    }
-  } catch {
-    // Fall through to prompt fallback for WebViews with blocked clipboard writes.
-  }
-
-  window.prompt('复制结果', text);
-  onDone('已打开复制文本');
+export function QuickScorePage({ onNavigate }: ScoreCalculatorPageProps = {}) {
+  return <ScoreCalculatorPage variant="quick" onNavigate={onNavigate} />;
 }
 
-export function QuickScorePage() {
-  return <ScoreCalculatorPage variant="quick" />;
+export function LegacyScorePage({ onNavigate }: ScoreCalculatorPageProps = {}) {
+  return <ScoreCalculatorPage variant="legacy" onNavigate={onNavigate} />;
 }
 
-export function LegacyScorePage() {
-  return <ScoreCalculatorPage variant="legacy" />;
-}
-
-function ScoreCalculatorPage({ variant }: { variant: ScorePageVariant }) {
+function ScoreCalculatorPage({ variant, onNavigate }: ScoreCalculatorPageProps & { variant: ScorePageVariant }) {
   const isLegacy = variant === 'legacy';
   const [initialDraft] = useState(() => {
     const savedDraft = loadScoreDraft(variant);
@@ -200,8 +214,6 @@ function ScoreCalculatorPage({ variant }: { variant: ScorePageVariant }) {
   const [melds, setMelds] = useState<MeldInput[]>(
     initialDraft.melds.map((meld) => createMeldInput(meld.kind, parseTileCodes(meld.tiles))),
   );
-  const [meldKind, setMeldKind] = useState<MeldKind>('chi');
-  const [meldDraftTiles, setMeldDraftTiles] = useState<TileCode[]>([]);
   const [doraIndicators, setDoraIndicators] = useState<TileCode[]>(initialDraft.doraIndicators);
   const [uraDoraIndicators, setUraDoraIndicators] = useState<TileCode[]>(initialDraft.uraDoraIndicators);
   const [roundWind, setRoundWind] = useState<Wind>(initialDraft.roundWind);
@@ -209,12 +221,14 @@ function ScoreCalculatorPage({ variant }: { variant: ScorePageVariant }) {
   const [honba, setHonba] = useState(initialDraft.honba);
   const [northDoraCount, setNorthDoraCount] = useState<0 | 1 | 2 | 3 | 4>(initialDraft.northDoraCount);
   const [doubleWindPairTwoFu, setDoubleWindPairTwoFu] = useState(initialDraft.doubleWindPairTwoFu);
-  const [conditions, setConditions] = useState<ScoreConditions>({ ...initialDraft.conditions });
-  const [keyboardTarget, setKeyboardTarget] = useState<KeyboardTarget | null>(null);
+  const [conditions, setConditions] = useState<ScoreConditions>(() =>
+    sanitizeConditionsForMelds({ ...initialDraft.conditions }, melds),
+  );
+  const [entryDraft, setEntryDraft] = useState<EntryDraft | null>(null);
   const [copyMessage, setCopyMessage] = useState('');
-  const meldDraftError = validateMeldDraft(meldKind, meldDraftTiles, mode);
   const expectedClosedTiles = expectedClosedTileCount(melds.length);
   const selectedHandWinTileIndex = normalizeWinTileIndex(handTiles.length, expectedClosedTiles, winTileIndex);
+  const disabledConditions = disabledConditionsForMelds(melds);
 
   useEffect(() => {
     const applyImportedTiles = () => {
@@ -277,6 +291,14 @@ function ScoreCalculatorPage({ variant }: { variant: ScorePageVariant }) {
 
   const computation = useMemo<QuickComputation>(() => {
     if (handTiles.length === 0) return { kind: 'empty' };
+    if (handTiles.length < expectedClosedTiles) {
+      return {
+        kind: 'incomplete',
+        current: handTiles.length,
+        expected: expectedClosedTiles,
+        missing: expectedClosedTiles - handTiles.length,
+      };
+    }
 
     try {
       const parsedHandTiles = parseTileCodes(handTiles);
@@ -308,6 +330,7 @@ function ScoreCalculatorPage({ variant }: { variant: ScorePageVariant }) {
     conditions,
     doraIndicators,
     doubleWindPairTwoFu,
+    expectedClosedTiles,
     honba,
     melds,
     mode,
@@ -320,53 +343,216 @@ function ScoreCalculatorPage({ variant }: { variant: ScorePageVariant }) {
     isLegacy,
   ]);
 
-  const keyboardTiles =
-    keyboardTarget === 'dora'
-      ? doraIndicators
-      : keyboardTarget === 'ura'
-        ? uraDoraIndicators
-        : keyboardTarget === 'meld'
-          ? meldDraftTiles
-          : handTiles;
+  const openEntryEditor = (target: KeyboardTarget, requestedMeldIndex: number | null = null) => {
+    const editingMeldIndex =
+      target === 'meld' && requestedMeldIndex !== null && melds[requestedMeldIndex]
+        ? requestedMeldIndex
+        : null;
+    const editingMeld = editingMeldIndex === null ? null : melds[editingMeldIndex];
 
-  const setKeyboardTiles = (tiles: string[]) => {
-    const next = toTileCodes(tiles);
-    if (keyboardTarget === 'dora') {
-      setDoraIndicators(next);
-      return;
-    }
-    if (keyboardTarget === 'ura') {
-      setUraDoraIndicators(next);
-      return;
-    }
-    if (keyboardTarget === 'meld') {
-      setMeldDraftTiles(next);
-      return;
-    }
-    const previousLength = handTiles.length;
-    setHandTiles(next);
-    setWinTileIndex((current) => {
-      if (next.length !== expectedClosedTiles) return null;
-      if (next.length !== previousLength || current === null) return next.length - 1;
-      return Math.min(current, next.length - 1);
+    setEntryDraft({
+      target,
+      handTiles: [...handTiles],
+      winTileIndex,
+      melds: [...melds],
+      doraIndicators: [...doraIndicators],
+      uraDoraIndicators: [...uraDoraIndicators],
+      editingMeldIndex,
+      meldPreviewTiles: editingMeld ? editingMeld.tiles.map(tileToCode) : [],
     });
   };
 
-  const selectHandWinTileIndex = (index: number) => {
-    if (handTiles.length === 0) return;
-    setWinTileIndex(index);
+  const getQuickEntryCandidates = (tile: string): QuickEntryCandidate[] => {
+    if (!entryDraft || !isTileCode(tile) || (entryDraft.target !== 'hand' && entryDraft.target !== 'meld')) return [];
+    if (entryDraft.target === 'hand') {
+      const inventory = [
+        ...entryDraft.handTiles,
+        ...entryDraft.melds.flatMap((meld) => meld.tiles.map(tileToCode)),
+        ...entryDraft.doraIndicators,
+        ...entryDraft.uraDoraIndicators,
+      ];
+      return buildQuickEntryCandidates({
+        target: 'hand',
+        anchor: tile,
+        mode,
+        inventory,
+        handTileCount: entryDraft.handTiles.length,
+        meldCount: entryDraft.melds.length,
+      });
+    }
+
+    const inventory = [
+      ...entryDraft.handTiles,
+      ...entryDraft.melds.flatMap((meld, index) =>
+        index === entryDraft.editingMeldIndex ? [] : meld.tiles.map(tileToCode),
+      ),
+      ...entryDraft.doraIndicators,
+      ...entryDraft.uraDoraIndicators,
+    ];
+    return buildQuickEntryCandidates({
+      target: 'meld',
+      anchor: tile,
+      mode,
+      inventory,
+      handTileCount: entryDraft.handTiles.length,
+      meldCount: entryDraft.melds.length,
+      replacingMeld: entryDraft.editingMeldIndex !== null,
+    });
+  };
+
+  const getQuickTileActions = (tile: string): QuickTileAction[] =>
+    getQuickEntryCandidates(tile).map((candidate) => ({
+      id: candidate.id,
+      label: candidate.label,
+      tiles: candidate.tiles,
+      meldKind: candidate.meldKind,
+      calledTileIndex:
+        candidate.meldKind === 'chi' || candidate.meldKind === 'pon' ? null : undefined,
+    }));
+
+  const keyboardTiles = entryDraft
+    ? entryDraft.target === 'dora'
+      ? entryDraft.doraIndicators
+      : entryDraft.target === 'ura'
+        ? entryDraft.uraDoraIndicators
+        : entryDraft.target === 'meld'
+          ? entryDraft.meldPreviewTiles
+          : entryDraft.handTiles
+    : [];
+
+  const setKeyboardTiles = (tiles: string[]) => {
+    const next = toTileCodes(tiles);
+    setEntryDraft((current) => {
+      if (!current) return current;
+      if (current.target === 'dora') return { ...current, doraIndicators: next };
+      if (current.target === 'ura') return { ...current, uraDoraIndicators: next };
+      if (current.target === 'meld') return current;
+
+      const previousLength = current.handTiles.length;
+      const expected = expectedClosedTileCount(current.melds.length);
+      const nextWinTileIndex =
+        next.length !== expected
+          ? null
+          : next.length !== previousLength || current.winTileIndex === null
+            ? next.length - 1
+            : Math.min(current.winTileIndex, next.length - 1);
+      return {
+        ...current,
+        handTiles: next,
+        winTileIndex: nextWinTileIndex,
+      };
+    });
+  };
+
+  const editorBaseInventory = (draft: EntryDraft): TileCode[] => {
+    if (draft.target === 'hand') {
+      return [
+        ...draft.melds.flatMap((meld) => meld.tiles.map(tileToCode)),
+        ...draft.doraIndicators,
+        ...draft.uraDoraIndicators,
+      ];
+    }
+    if (draft.target === 'dora') {
+      return [
+        ...draft.handTiles,
+        ...draft.melds.flatMap((meld) => meld.tiles.map(tileToCode)),
+        ...draft.uraDoraIndicators,
+      ];
+    }
+    if (draft.target === 'ura') {
+      return [
+        ...draft.handTiles,
+        ...draft.melds.flatMap((meld) => meld.tiles.map(tileToCode)),
+        ...draft.doraIndicators,
+      ];
+    }
+    return [
+      ...draft.handTiles,
+      ...draft.melds.flatMap((meld, index) =>
+        index === draft.editingMeldIndex ? [] : meld.tiles.map(tileToCode),
+      ),
+      ...draft.doraIndicators,
+      ...draft.uraDoraIndicators,
+    ];
+  };
+
+  const isEditorTileDisabled = (tile: string, currentTiles: string[]) => {
+    if (!entryDraft || !isTileCode(tile)) return true;
+    if (entryDraft.target === 'meld' && entryDraft.editingMeldIndex === null && entryDraft.melds.length >= 4) {
+      return true;
+    }
+    const additions = entryDraft.target === 'meld' ? [tile] : [...toTileCodes(currentTiles), tile];
+    return !canUseTileCodes(editorBaseInventory(entryDraft), additions, mode);
+  };
+
+  const applyQuickEntryCandidate = (actionId: string, tile: string) => {
+    const candidate = getQuickEntryCandidates(tile).find((item) => item.id === actionId);
+    if (!candidate) return;
+
+    setEntryDraft((current) => {
+      if (!current) return current;
+      if (current.target === 'hand') {
+        if (candidate.destination !== 'hand') return current;
+        const nextHand = [...current.handTiles, ...candidate.tiles];
+        const nextExpected = expectedClosedTileCount(current.melds.length);
+        return {
+          ...current,
+          handTiles: nextHand,
+          winTileIndex: normalizeWinTileIndex(nextHand.length, nextExpected, null),
+        };
+      }
+
+      if (current.target !== 'meld' || !candidate.meldKind) return current;
+      const nextMeld = createMeldInput(candidate.meldKind, parseTileCodes(candidate.tiles));
+      const nextMelds = [...current.melds];
+      const nextEditingMeldIndex = current.editingMeldIndex ?? nextMelds.length;
+      if (current.editingMeldIndex === null) nextMelds.push(nextMeld);
+      else nextMelds[nextEditingMeldIndex] = nextMeld;
+      return {
+        ...current,
+        melds: nextMelds,
+        editingMeldIndex: nextEditingMeldIndex,
+        meldPreviewTiles: [...candidate.tiles],
+      };
+    });
+  };
+
+  const deleteMeldEditorSelection = () => {
+    setEntryDraft((current) => {
+      if (!current || current.target !== 'meld') return current;
+      const nextMelds =
+        current.editingMeldIndex === null ? current.melds : removeAt(current.melds, current.editingMeldIndex);
+      return {
+        ...current,
+        melds: nextMelds,
+        editingMeldIndex: null,
+        meldPreviewTiles: [],
+      };
+    });
+  };
+
+  const commitEntryDraft = () => {
+    if (!entryDraft) return;
+    const expected = expectedClosedTileCount(entryDraft.melds.length);
+    setHandTiles(entryDraft.handTiles);
+    setWinTileIndex(normalizeWinTileIndex(entryDraft.handTiles.length, expected, entryDraft.winTileIndex));
+    setMelds(entryDraft.melds);
+    setConditions((current) => sanitizeConditionsForMelds(current, entryDraft.melds));
+    setDoraIndicators(entryDraft.doraIndicators);
+    setUraDoraIndicators(entryDraft.uraDoraIndicators);
+    setEntryDraft(null);
+  };
+
+  const selectDraftWinTileIndex = (index: number) => {
+    setEntryDraft((current) => {
+      if (!current || current.target !== 'hand' || current.handTiles[index] === undefined) return current;
+      return { ...current, winTileIndex: index };
+    });
   };
 
   const selectMode = (nextMode: ScoreMode) => {
     setMode(nextMode);
-    if (nextMode === 'sanma' && meldKind === 'chi') setMeldKind('pon');
     if (nextMode === 'yonma') setNorthDoraCount(0);
-  };
-
-  const addMeld = () => {
-    if (meldDraftError || melds.length >= 4) return;
-    setMelds((value) => [...value, createMeldInput(meldKind, parseTileCodes(meldDraftTiles))]);
-    setMeldDraftTiles([]);
   };
 
   const reset = () => {
@@ -375,8 +561,6 @@ function ScoreCalculatorPage({ variant }: { variant: ScorePageVariant }) {
     setHandTiles([]);
     setWinTileIndex(null);
     setMelds([]);
-    setMeldKind('chi');
-    setMeldDraftTiles([]);
     setDoraIndicators([]);
     setUraDoraIndicators([]);
     setRoundWind('east');
@@ -385,12 +569,38 @@ function ScoreCalculatorPage({ variant }: { variant: ScorePageVariant }) {
     setNorthDoraCount(0);
     setDoubleWindPairTwoFu(false);
     setConditions({ ...DEFAULT_SCORE_CONDITIONS });
-    setKeyboardTarget(null);
+    setEntryDraft(null);
     setCopyMessage('');
   };
 
   const toggleCondition = (key: keyof ScoreConditions) => {
+    if (disabledConditions.has(key)) return;
     setConditions((value) => ({ ...value, [key]: !value[key] }));
+  };
+
+  const toggleLegacyMode = () => {
+    const targetVariant: ScorePageVariant = isLegacy ? 'quick' : 'legacy';
+    const targetPage: ScorePageTarget = isLegacy ? 'quick-score' : 'legacy-score';
+    saveScoreDraft(targetVariant, {
+      version: 1,
+      mode,
+      handTiles,
+      winTileIndex,
+      melds: melds.map((meld) => ({
+        kind: getMeldKind(meld),
+        tiles: meld.tiles.map(tileToCode),
+      })),
+      doraIndicators,
+      uraDoraIndicators,
+      roundWind,
+      seatWind,
+      honba,
+      northDoraCount,
+      doubleWindPairTwoFu,
+      conditions,
+    });
+    if (onNavigate) onNavigate(targetPage);
+    else window.location.hash = `#/${targetPage}`;
   };
 
   const openHandRecognition = () => {
@@ -398,10 +608,17 @@ function ScoreCalculatorPage({ variant }: { variant: ScorePageVariant }) {
     window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'smooth' }));
   };
 
-  const resultText = makeResultText(computation);
   const noYakuWarnings = computation.kind === 'score' && !computation.result.valid ? computation.result.warnings : [];
   const invalidErrors = computation.kind === 'invalid' ? computation.errors : [];
   const quickActions = [
+    {
+      id: 'legacy-mode',
+      label: '古役模式',
+      icon: <History aria-hidden="true" />,
+      ariaPressed: isLegacy,
+      variant: isLegacy ? 'primary' as const : 'ghost' as const,
+      onClick: toggleLegacyMode,
+    },
     {
       id: 'reset',
       label: '清空',
@@ -409,127 +626,160 @@ function ScoreCalculatorPage({ variant }: { variant: ScorePageVariant }) {
       variant: 'ghost' as const,
       onClick: reset,
     },
-    {
-      id: 'modify',
-      label: '修改',
-      icon: <SlidersHorizontal aria-hidden="true" />,
-      variant: 'ghost' as const,
-      onClick: () => setKeyboardTarget('hand'),
-    },
-    {
-      id: 'share-result',
-      label: '分享结果',
-      icon: <Share2 aria-hidden="true" />,
-      disabled: !resultText,
-      onClick: () => void copyResult(resultText, setCopyMessage),
-    },
   ];
+
+  const meldTileCount = melds.reduce((total, meld) => total + meld.tiles.length, 0);
+  const meldSlotCount = Math.max(14, meldTileCount);
+  const meldEmptySlotCount = meldSlotCount - meldTileCount;
+  const draftExpectedClosedTiles = entryDraft ? expectedClosedTileCount(entryDraft.melds.length) : expectedClosedTiles;
+  const draftSelectedWinTileIndex =
+    entryDraft?.target === 'hand'
+      ? normalizeWinTileIndex(entryDraft.handTiles.length, draftExpectedClosedTiles, entryDraft.winTileIndex)
+      : null;
+  const canSelectDraftWinTile =
+    entryDraft?.target === 'hand' && entryDraft.handTiles.length === draftExpectedClosedTiles;
+  const editingMeld =
+    entryDraft?.target === 'meld' && entryDraft.editingMeldIndex !== null
+      ? entryDraft.melds[entryDraft.editingMeldIndex]
+      : undefined;
+  const editingMeldKind = editingMeld ? getMeldKind(editingMeld) : null;
+  const editingMeldExpectedTileCount =
+    editingMeldKind === 'openKan' || editingMeldKind === 'closedKan' || editingMeldKind === 'addedKan' ? 4 : 3;
+  const keyboardTitle =
+    entryDraft?.target === 'hand'
+      ? '录入手牌'
+      : entryDraft?.target === 'dora'
+        ? '录入宝牌指示牌'
+        : entryDraft?.target === 'ura'
+          ? '录入里宝牌指示牌'
+          : editingMeldKind
+            ? `编辑${MELD_KIND_LABELS[editingMeldKind]}`
+            : '录入副露';
+  const keyboardSubtitle =
+    entryDraft?.target === 'hand'
+      ? undefined
+      : entryDraft?.target === 'dora'
+        ? '最多录入 5 张宝牌指示牌。'
+        : entryDraft?.target === 'ura'
+          ? '最多录入 5 张里宝牌指示牌。'
+          : undefined;
+  const keyboardPreviewLabel =
+    entryDraft?.target === 'hand'
+      ? '当前手牌'
+      : entryDraft?.target === 'dora'
+        ? '宝牌指示牌'
+      : entryDraft?.target === 'ura'
+          ? '里宝牌指示牌'
+          : entryDraft?.editingMeldIndex !== null
+            ? '当前副露'
+            : '副露预览';
 
   return (
     <div className={isLegacy ? 'mj-page-stack mj-quick-page mj-legacy-page' : 'mj-page-stack mj-quick-page'}>
       <QuickScorePanel computation={computation} seatWind={seatWind} />
 
-      <FieldGroup
-        actions={<span>{handTiles.length}/{expectedClosedTiles}</span>}
-        className="mj-quick-hand-group"
-        density="compact"
-        legend="手牌与副露"
-        legendVisibility="sr-only"
-      >
-        <TileStrip
-          aria-label="当前手牌与和牌张/最后摸切张"
-          className="mj-quick-tile-row"
-          emptyLabel={null}
-          highlightIndex={selectedHandWinTileIndex}
-          maxSlots={expectedClosedTiles}
-          role="group"
-          tileActionLabel={(index, tileLabel) => `设第 ${index + 1} 张${tileLabel}为和牌张/最后摸切张`}
-          tileSize="xs"
-          tiles={handTiles}
-          onTileClick={selectHandWinTileIndex}
-        />
-
-        {melds.length > 0 ? (
-          <div className="mj-meld-list" aria-label="已录入副露面子">
-            {melds.map((meld, index) => (
-              <div key={`${meld.type}-${index}`} className="mj-meld-row">
-                <div className="mj-meld-row__content">
-                  <strong>{MELD_KIND_LABELS[getMeldKind(meld)]}</strong>
-                  <TileStrip tileSize="xs" tiles={meld.tiles.map(tileToCode)} />
-                </div>
-                <ActionButton
-                  aria-label={`删除第 ${index + 1} 组副露`}
-                  icon={<Trash2 aria-hidden="true" />}
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => setMelds(melds.filter((_, currentIndex) => currentIndex !== index))}
-                >
-                  删除
-                </ActionButton>
-              </div>
-            ))}
-          </div>
-        ) : null}
-
-        <div className="mj-quick-hand-actions">
-          <ActionButton icon={<Plus aria-hidden="true" />} onClick={() => setKeyboardTarget('hand')}>
-            手牌
-          </ActionButton>
-          <ActionButton icon={<Copy aria-hidden="true" />} variant="ghost" onClick={() => setKeyboardTarget('meld')}>
-            副露
-          </ActionButton>
-          <ActionButton icon={<Sparkles aria-hidden="true" />} variant="gold" onClick={() => setKeyboardTarget('dora')}>
-            宝牌/里宝
-          </ActionButton>
-        </div>
-
-        {doraIndicators.length > 0 || uraDoraIndicators.length > 0 ? (
-          <div className="mj-dora-compact">
-            <button type="button" onClick={() => setKeyboardTarget('dora')}>
-              <span>宝牌</span>
-              <TileStrip emptyLabel="无" maxSlots={5} tileSize="xs" tiles={doraIndicators} />
-            </button>
-            <button type="button" onClick={() => setKeyboardTarget('ura')}>
-              <span>里宝牌</span>
-              <TileStrip emptyLabel="无" maxSlots={5} tileSize="xs" tiles={uraDoraIndicators} />
-            </button>
-          </div>
-        ) : null}
-
-        {keyboardTarget === 'meld' || meldDraftTiles.length > 0 ? (
-          <div className="mj-meld-editor">
-            <SegmentedControl
-              ariaLabel="选择副露面子类型"
-              options={MELD_KIND_OPTIONS.map((option) => ({
-                value: option.value,
-                label: option.label,
-                disabled: mode === 'sanma' && option.value === 'chi',
-              }))}
-              value={meldKind}
-              onChange={(value) => {
-                setMeldKind(value);
-                setMeldDraftTiles([]);
-              }}
-            />
-            <TileStrip
-              emptyLabel={`选择${MELD_KIND_LABELS[meldKind]}所需牌`}
-              maxSlots={meldTileLimit(meldKind)}
-              tileSize="xs"
-              tiles={meldDraftTiles}
-              onRemove={(index) => setMeldDraftTiles(meldDraftTiles.filter((_, currentIndex) => currentIndex !== index))}
-            />
-            {meldDraftTiles.length > 0 && meldDraftError ? <Alert tone="warning">{meldDraftError}</Alert> : null}
-            <ActionButton
-              disabled={Boolean(meldDraftError) || melds.length >= 4}
-              fullWidth
-              icon={<Plus aria-hidden="true" />}
-              variant="secondary"
-              onClick={addMeld}
+      <FieldGroup className="mj-quick-hand-group" density="compact" legend="牌面录入" legendVisibility="sr-only">
+        <div className="mj-quick-entry-layout">
+          <div className="mj-entry-block mj-hand-entry-block">
+            <button
+              aria-label={`编辑手牌，当前 ${handTiles.length}/${expectedClosedTiles}`}
+              className="mj-quick-count-action"
+              type="button"
+              onClick={() => openEntryEditor('hand')}
             >
-              添加面子
-            </ActionButton>
+              {handTiles.length}/{expectedClosedTiles}
+            </button>
+            <TileStrip
+              aria-label="当前手牌与和牌张/最后摸切张"
+              className="mj-entry-slot-strip mj-quick-hand-strip"
+              emptyLabel={null}
+              emptySlotActionLabel={(index) => `录入第 ${index + 1} 张手牌`}
+              highlightIndex={selectedHandWinTileIndex}
+              maxSlots={expectedClosedTiles}
+              role="group"
+              style={entrySlotStyle(Math.max(expectedClosedTiles, handTiles.length))}
+              tileActionLabel={(index, tileLabel) => `编辑手牌（第 ${index + 1} 张${tileLabel}）`}
+              tileSize="xs"
+              tiles={handTiles}
+              onEmptySlotClick={() => openEntryEditor('hand')}
+              onTileClick={() => openEntryEditor('hand')}
+            />
           </div>
-        ) : null}
+
+          <div className="mj-indicator-entry-grid">
+            <div className="mj-entry-block">
+              <span className="mj-entry-label">宝牌指示牌</span>
+              <TileStrip
+                aria-label="宝牌指示牌"
+                className="mj-entry-slot-strip mj-indicator-entry-strip"
+                emptyLabel={null}
+                emptySlotActionLabel={(index) => `录入第 ${index + 1} 张宝牌指示牌`}
+                maxSlots={5}
+                role="group"
+                style={entrySlotStyle(5)}
+                tileActionLabel={(_, tileLabel) => `编辑宝牌指示牌中的${tileLabel}`}
+                tileSize="xs"
+                tiles={doraIndicators}
+                onEmptySlotClick={() => openEntryEditor('dora')}
+                onTileClick={() => openEntryEditor('dora')}
+              />
+            </div>
+            <div className="mj-entry-block">
+              <span className="mj-entry-label">里宝牌指示牌</span>
+              <TileStrip
+                aria-label="里宝牌指示牌"
+                className="mj-entry-slot-strip mj-indicator-entry-strip"
+                emptyLabel={null}
+                emptySlotActionLabel={(index) => `录入第 ${index + 1} 张里宝牌指示牌`}
+                maxSlots={5}
+                role="group"
+                style={entrySlotStyle(5)}
+                tileActionLabel={(_, tileLabel) => `编辑里宝牌指示牌中的${tileLabel}`}
+                tileSize="xs"
+                tiles={uraDoraIndicators}
+                onEmptySlotClick={() => openEntryEditor('ura')}
+                onTileClick={() => openEntryEditor('ura')}
+              />
+            </div>
+          </div>
+
+          <div className="mj-entry-block">
+            <span className="mj-entry-label">副露</span>
+            <div
+              aria-label="副露"
+              className="mj-tile-strip mj-entry-slot-strip mj-meld-entry-strip"
+              role="group"
+              style={entrySlotStyle(meldSlotCount)}
+            >
+              <div className="mj-tile-strip__row mj-meld-entry-strip__row">
+                {melds.map((meld, meldIndex) => {
+                  const kind = getMeldKind(meld);
+                  return (
+                    <MeldTileGroup
+                      key={`${kind}-${meldIndex}`}
+                      ariaLabel={`编辑第 ${meldIndex + 1} 组副露（${MELD_KIND_LABELS[kind]}）`}
+                      calledTileIndex={kind === 'chi' ? null : undefined}
+                      kind={kind}
+                      size="xs"
+                      tiles={meld.tiles.map(tileToCode)}
+                      onClick={() => openEntryEditor('meld', meldIndex)}
+                    />
+                  );
+                })}
+                {Array.from({ length: meldEmptySlotCount }).map((_, index) => (
+                  <button
+                    key={`meld-empty-${index}`}
+                    aria-label={`录入副露，第 ${meldTileCount + index + 1} 个占位`}
+                    className="mj-tile mj-tile--xs mj-tile--empty"
+                    disabled={melds.length >= 4}
+                    type="button"
+                    onClick={() => openEntryEditor('meld')}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
       </FieldGroup>
 
       <div className="mj-quick-scan-entry">
@@ -595,7 +845,12 @@ function ScoreCalculatorPage({ variant }: { variant: ScorePageVariant }) {
         <div className="mj-quick-extra-layout">
           <div className="mj-quick-chip-grid">
             {EXTRA_OPTIONS.map((option) => (
-              <Chip key={option.key} selected={conditions[option.key]} onClick={() => toggleCondition(option.key)}>
+              <Chip
+                key={option.key}
+                disabled={disabledConditions.has(option.key)}
+                selected={conditions[option.key]}
+                onClick={() => toggleCondition(option.key)}
+              >
                 {option.label}
               </Chip>
             ))}
@@ -603,6 +858,7 @@ function ScoreCalculatorPage({ variant }: { variant: ScorePageVariant }) {
             {isLegacy ? LEGACY_EVENT_OPTIONS.map((option) => (
               <Chip
                 key={option.key}
+                disabled={disabledConditions.has(option.key)}
                 selected={conditions[option.key]}
                 title={option.note}
                 onClick={() => toggleCondition(option.key)}
@@ -616,6 +872,7 @@ function ScoreCalculatorPage({ variant }: { variant: ScorePageVariant }) {
               <Chip
                 key={option.key}
                 className="mj-quick-common-chip"
+                disabled={disabledConditions.has(option.key)}
                 selected={conditions[option.key]}
                 onClick={() => toggleCondition(option.key)}
               >
@@ -644,39 +901,54 @@ function ScoreCalculatorPage({ variant }: { variant: ScorePageVariant }) {
         </Alert>
       ) : null}
 
-      <QuickEfficiencyPanel computation={computation} />
-
-      <ShareBar actions={quickActions} label={null} size="md" />
+      <ShareBar className="mj-quick-result-actions" actions={quickActions} label={null} size="md" />
 
       {copyMessage ? <Alert tone="success">{copyMessage}</Alert> : null}
 
       <TileKeyboard
         allowRedFives
+        deleteLabel={
+          entryDraft?.target === 'meld' ? '删除这组' : '删除'
+        }
         doneLabel="完成"
         maxTiles={
-          keyboardTarget === 'hand'
-            ? expectedClosedTiles
-            : keyboardTarget === 'meld'
-              ? meldTileLimit(meldKind)
+          entryDraft?.target === 'hand'
+            ? draftExpectedClosedTiles
+            : entryDraft?.target === 'meld'
+              ? 4
               : 5
         }
-        open={keyboardTarget !== null}
-        previewHighlightIndex={keyboardTarget === 'hand' ? selectedHandWinTileIndex : null}
+        open={entryDraft !== null}
+        previewHighlightIndex={draftSelectedWinTileIndex}
         previewHighlightLast={false}
-        previewLabel={
-          keyboardTarget === 'hand'
-            ? '当前手牌'
-            : keyboardTarget === 'meld'
-              ? `${MELD_KIND_LABELS[meldKind]}预览`
-              : '当前指示牌'
+        previewLabel={keyboardPreviewLabel}
+        previewReadOnly={entryDraft?.target === 'meld'}
+        previewMeldKind={
+          entryDraft?.target === 'meld' &&
+          editingMeldKind &&
+          keyboardTiles.length === editingMeldExpectedTileCount
+            ? editingMeldKind
+            : undefined
         }
+        previewMeldCalledTileIndex={editingMeldKind === 'chi' ? null : undefined}
+        quickActionOnly={entryDraft?.target === 'meld'}
+        replaceTilesOnInput={entryDraft?.target === 'meld'}
+        getQuickActions={
+          entryDraft?.target === 'hand' || entryDraft?.target === 'meld'
+            ? (tile) => getQuickTileActions(tile)
+            : undefined
+        }
+        showClearAction={entryDraft?.target !== 'meld'}
+        subtitle={keyboardSubtitle}
         tiles={keyboardTiles}
-        title={null}
-        isTileDisabled={hasFourPhysicalCopies}
+        title={keyboardTitle}
+        isTileDisabled={isEditorTileDisabled}
         onChange={setKeyboardTiles}
-        onClose={() => setKeyboardTarget(null)}
-        onDone={() => setKeyboardTarget(null)}
-        onPreviewTileSelect={keyboardTarget === 'hand' ? selectHandWinTileIndex : undefined}
+        onClose={() => setEntryDraft(null)}
+        onDelete={entryDraft?.target === 'meld' ? deleteMeldEditorSelection : undefined}
+        onDone={commitEntryDraft}
+        onPreviewTileSelect={canSelectDraftWinTile ? selectDraftWinTileIndex : undefined}
+        onQuickAction={(action, tile) => applyQuickEntryCandidate(action.id, tile)}
       />
     </div>
   );
@@ -698,6 +970,16 @@ function QuickScorePanel({ computation, seatWind }: { computation: QuickComputat
         <span>最终点数</span>
         <strong>-</strong>
         <small>录入手牌、和牌方式和场况后显示计算结果</small>
+      </SurfacePanel>
+    );
+  }
+
+  if (computation.kind === 'incomplete') {
+    return (
+      <SurfacePanel aria-live="polite" className="mj-score-hero mj-score-hero--quick mj-score-hero--empty" role="status">
+        <span>牌面未录完整</span>
+        <strong className="mj-score-hero__shanten">还需录入 {computation.missing} 张</strong>
+        <small>当前 {computation.current}/{computation.expected}</small>
       </SurfacePanel>
     );
   }
@@ -726,54 +1008,26 @@ function QuickScorePanel({ computation, seatWind }: { computation: QuickComputat
   }
 
   if (computation.kind === 'efficiency') {
+    const result = computation.result;
+    const effectiveTiles = result.effective_tiles.slice(0, 7).map((entry) => tileToCode(entry.tile));
+    const shantenText = formatShanten(result.shanten);
     return (
       <SurfacePanel aria-live="polite" className="mj-score-hero mj-score-hero--quick mj-score-hero--empty" role="status">
-        <span>最终点数</span>
-        <strong>-</strong>
-        <small>当前牌姿未组成和牌，已转为向听与有效牌估算</small>
+        <span>未和牌</span>
+        <strong className="mj-score-hero__shanten">{shantenText}</strong>
+        <small>有效牌 {result.total_effective_tiles} 枚</small>
+        <div className="mj-quick-tile-row mj-score-hero__effective-tiles">
+          {effectiveTiles.length > 0 ? (
+            effectiveTiles.map((tile, index) => (
+              <MahjongTile key={`${tile}-${index}`} code={tile} size="sm" />
+            ))
+          ) : (
+            <span className="mj-muted-line">没有可列出的有效牌</span>
+          )}
+        </div>
       </SurfacePanel>
     );
   }
 
   return null;
-}
-
-function QuickEfficiencyPanel({ computation }: { computation: QuickComputation }) {
-  if (computation.kind !== 'efficiency') return null;
-
-  const result = computation.result;
-  const effective_tiles = result.effective_tiles.slice(0, 7).map((entry) => tileToCode(entry.tile));
-  const shantenText = result.shanten < 0 ? '听牌/和牌' : `${result.shanten} 向听`;
-  const countText = `${result.total_effective_tiles} 枚`;
-
-  return (
-    <SurfacePanel aria-live="polite" density="compact" role="status" title="未和牌时" tone="info">
-      <p className="mj-efficiency-title">{shantenText} · 有效牌 {countText}</p>
-      <div className="mj-quick-tile-row">
-        {effective_tiles.length > 0 ? (
-          effective_tiles.map((tile, index) => (
-            <MahjongTile key={`${tile}-${index}`} code={tile} size="sm" />
-          ))
-        ) : (
-          <span className="mj-muted-line">没有可列出的有效牌</span>
-        )}
-      </div>
-    </SurfacePanel>
-  );
-}
-
-function makeResultText(computation: QuickComputation): string {
-  if (computation.kind === 'empty' || computation.kind === 'invalid') return '';
-  if (computation.kind === 'efficiency') {
-    const result = computation.result;
-    return `牌效估算：${result.shanten} 向听，有效牌 ${result.total_effective_tiles} 枚`;
-  }
-  const result = computation.result;
-  if (!result.valid) return `不能计分：${result.warnings.join('、') || '没有役'}`;
-  return [
-    `日麻算分：${formatHan(result.han)} ${formatFu(result.fu)} ${formatLimit(result)}`,
-    `方式：${formatWinMethod(result.is_tsumo ? 'tsumo' : 'ron')}`,
-    `收入：${formatPoints(result.cost?.total)}`,
-    `役种：${result.yaku.map((yaku) => `${yaku.name}${formatHan(yaku.han)}`).join('、')}`,
-  ].join('\n');
 }

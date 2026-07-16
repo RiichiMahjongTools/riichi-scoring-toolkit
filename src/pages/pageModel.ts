@@ -43,7 +43,6 @@ export const APP_SECTIONS: readonly AppSection[] = [
     tabs: [
       { page: 'quick-score', label: '快速算分' },
       { page: 'han-fu-calculator', label: '番符换算' },
-      { page: 'legacy-score', label: '古役' },
     ],
   },
   {
@@ -109,6 +108,7 @@ export interface PageResolution {
 }
 
 export function sectionForPage(page: PageId): AppSection | undefined {
+  if (page === 'legacy-score') return APP_SECTIONS.find((section) => section.id === 'score');
   return APP_SECTIONS.find((section) => section.tabs.some((tab) => tab.page === page));
 }
 

@@ -13,12 +13,16 @@ import {
   Wrench,
   X,
 } from 'lucide-react';
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type {
   ButtonHTMLAttributes,
+  CSSProperties,
   FieldsetHTMLAttributes,
   FormEvent,
   HTMLAttributes,
+  KeyboardEvent as ReactKeyboardEvent,
+  PointerEvent as ReactPointerEvent,
+  RefObject,
   ReactNode,
 } from 'react';
 
@@ -592,6 +596,7 @@ const numberAssetPrefix: Record<Exclude<TileSuitId, 'z'>, string> = {
   p: 'Pin',
   s: 'Sou',
 };
+const TILE_BACK_ASSET = 'Back-Green.png';
 
 function parseTileCode(code: string): { suit: TileSuitId; rank: number; isRed: boolean } | null {
   const normalized = code.trim().toLowerCase();
@@ -622,7 +627,7 @@ export function tileCodeToMeta(code: string): TileMeta {
       suit: 'unknown',
       ariaLabel: '牌背',
       isRed: false,
-      assetFilename: 'Back.png',
+      assetFilename: TILE_BACK_ASSET,
     };
   }
 
@@ -671,6 +676,7 @@ export interface MahjongTileProps extends Omit<HTMLAttributes<HTMLSpanElement>, 
   code: string;
   size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
   selected?: boolean;
+  faceDown?: boolean;
   disabled?: boolean;
   onClick?: () => void;
   ariaLabel?: string;
@@ -682,6 +688,7 @@ export function MahjongTile({
   code,
   size = 'md',
   selected = false,
+  faceDown = false,
   disabled = false,
   onClick,
   ariaLabel,
@@ -691,11 +698,13 @@ export function MahjongTile({
   ...props
 }: MahjongTileProps) {
   const meta = tileCodeToMeta(code);
+  const isFaceDown = faceDown || code.trim().toLowerCase() === 'back';
   const tileClass = cx(
     'mj-tile',
     `mj-tile--${size}`,
     `mj-tile--${meta.suit}`,
-    meta.assetFilename && 'mj-tile--with-img',
+    (meta.assetFilename || isFaceDown) && 'mj-tile--with-img',
+    isFaceDown && 'mj-tile--face-down',
     meta.isRed && 'mj-tile--red',
     selected && 'mj-tile--selected',
     disabled && 'mj-tile--disabled',
@@ -703,7 +712,14 @@ export function MahjongTile({
   );
   const content = (
     <>
-      {meta.assetFilename ? (
+      {isFaceDown ? (
+        <img
+          alt=""
+          aria-hidden="true"
+          className="mj-tile__back-img"
+          src={`/tiles/fluffystuff/regular/${TILE_BACK_ASSET}`}
+        />
+      ) : meta.assetFilename ? (
         <img
           alt=""
           aria-hidden="true"
@@ -711,7 +727,7 @@ export function MahjongTile({
           src={`/tiles/fluffystuff/regular/${meta.assetFilename}`}
         />
       ) : null}
-      {marker ? <span className="mj-tile__marker">{marker}</span> : null}
+      {!isFaceDown && marker ? <span className="mj-tile__marker">{marker}</span> : null}
       <span className="mj-tile__rank">{meta.label}</span>
       {meta.suitLabel ? <span className="mj-tile__suit">{meta.suitLabel}</span> : null}
       {count ? <span className="mj-tile__count">{count}</span> : null}
@@ -721,7 +737,7 @@ export function MahjongTile({
   if (onClick) {
     return (
       <button
-        aria-label={ariaLabel ?? meta.ariaLabel}
+        aria-label={ariaLabel ?? (isFaceDown ? '牌背' : meta.ariaLabel)}
         aria-pressed={selected}
         className={tileClass}
         disabled={disabled}
@@ -738,10 +754,131 @@ export function MahjongTile({
 
   return (
     <span
-      aria-label={isAriaHidden ? undefined : ariaLabel ?? meta.ariaLabel}
+      aria-label={isAriaHidden ? undefined : ariaLabel ?? (isFaceDown ? '牌背' : meta.ariaLabel)}
       className={tileClass}
       role={isAriaHidden ? undefined : 'img'}
       {...props}
+    >
+      {content}
+    </span>
+  );
+}
+
+export type MeldTileGroupKind = 'chi' | 'pon' | 'openKan' | 'closedKan' | 'addedKan';
+
+const MELD_TILE_GROUP_LABELS: Record<MeldTileGroupKind, string> = {
+  chi: '吃',
+  pon: '碰',
+  openKan: '明杠',
+  closedKan: '暗杠',
+  addedKan: '加杠',
+};
+
+const DEFAULT_CALLED_TILE_INDEX: Partial<Record<MeldTileGroupKind, number>> = {
+  chi: 0,
+  pon: 1,
+  openKan: 1,
+  addedKan: 1,
+};
+
+export interface MeldTileGroupProps {
+  kind: MeldTileGroupKind;
+  tiles: readonly string[];
+  size?: MahjongTileProps['size'];
+  calledTileIndex?: number | null;
+  ariaLabel?: string;
+  ariaHidden?: boolean;
+  className?: string;
+  onClick?: () => void;
+}
+
+/**
+ * Renders a complete meld as one layout unit so called-tile rotation, spacing,
+ * bottom alignment, concealed-kan backs, and added-kan stacking cannot drift
+ * between consumers.
+ */
+export function MeldTileGroup({
+  kind,
+  tiles,
+  size = 'md',
+  calledTileIndex,
+  ariaLabel,
+  ariaHidden = false,
+  className,
+  onClick,
+}: MeldTileGroupProps) {
+  const displayedTiles = kind === 'addedKan' ? tiles.slice(0, 3) : tiles;
+  const addedTile = kind === 'addedKan' ? tiles[3] : undefined;
+  const requestedCalledIndex =
+    calledTileIndex === undefined ? DEFAULT_CALLED_TILE_INDEX[kind] : calledTileIndex;
+  const resolvedCalledIndex =
+    kind === 'closedKan' || requestedCalledIndex == null || displayedTiles.length === 0
+      ? null
+      : Math.min(Math.max(0, requestedCalledIndex), displayedTiles.length - 1);
+  const accessibleLabel =
+    ariaLabel ??
+    `${MELD_TILE_GROUP_LABELS[kind]}：${tiles.map((tile) => tileCodeToMeta(tile).ariaLabel).join('、')}`;
+  const groupClassName = cx(
+    'mj-meld-tile-group',
+    `mj-meld-tile-group--${size}`,
+    `mj-meld-tile-group--${kind}`,
+    className,
+  );
+  const content = displayedTiles.map((tile, index) => {
+    const isCalledTile = index === resolvedCalledIndex;
+    const isFaceDown = kind === 'closedKan' && (index === 0 || index === displayedTiles.length - 1);
+    return (
+      <span
+        key={`${tile}-${index}`}
+        aria-hidden="true"
+        className={cx(
+          'mj-meld-tile-group__slot',
+          isCalledTile && 'mj-meld-tile-group__slot--called',
+          isCalledTile && addedTile && 'mj-meld-tile-group__slot--added',
+        )}
+      >
+        <MahjongTile
+          aria-hidden="true"
+          className={isCalledTile ? 'mj-meld-tile-group__called-tile' : undefined}
+          code={tile}
+          faceDown={isFaceDown}
+          size={size}
+        />
+        {isCalledTile && addedTile ? (
+          <MahjongTile
+            aria-hidden="true"
+            className="mj-meld-tile-group__called-tile mj-meld-tile-group__added-tile"
+            code={addedTile}
+            size={size}
+          />
+        ) : null}
+      </span>
+    );
+  });
+
+  if (onClick) {
+    return (
+      <button
+        aria-label={accessibleLabel}
+        className={groupClassName}
+        data-meld-kind={kind}
+        data-tile-count={tiles.length}
+        type="button"
+        onClick={onClick}
+      >
+        {content}
+      </button>
+    );
+  }
+
+  return (
+    <span
+      aria-hidden={ariaHidden || undefined}
+      aria-label={ariaHidden ? undefined : accessibleLabel}
+      className={groupClassName}
+      data-meld-kind={kind}
+      data-tile-count={tiles.length}
+      role={ariaHidden ? undefined : 'img'}
     >
       {content}
     </span>
@@ -758,7 +895,12 @@ export interface TileStripProps extends HTMLAttributes<HTMLDivElement> {
   selectionMarker?: ReactNode;
   onTileClick?: (index: number) => void;
   tileActionLabel?: (index: number, tileLabel: string) => string;
+  tileMarker?: (index: number, tileLabel: string) => ReactNode;
+  tileFaceDown?: (index: number, tileLabel: string) => boolean;
   onRemove?: (index: number) => void;
+  onEmptySlotClick?: (index: number) => void;
+  emptySlotActionLabel?: (index: number) => string;
+  emptySlotsDisabled?: boolean;
   tileSize?: MahjongTileProps['size'];
 }
 
@@ -772,7 +914,12 @@ export function TileStrip({
   selectionMarker = '和',
   onTileClick,
   tileActionLabel,
+  tileMarker,
+  tileFaceDown,
   onRemove,
+  onEmptySlotClick,
+  emptySlotActionLabel,
+  emptySlotsDisabled = false,
   tileSize = 'md',
   className,
   ...props
@@ -788,6 +935,7 @@ export function TileStrip({
         {tiles.map((tile, index) => {
           const meta = tileCodeToMeta(tile);
           const isSelected = index === selectedIndex;
+          const faceDown = Boolean(tileFaceDown?.(index, meta.ariaLabel));
           const handleTileClick = onTileClick ?? onRemove;
           return (
             <MahjongTile
@@ -797,21 +945,148 @@ export function TileStrip({
                   ? (tileActionLabel?.(index, meta.ariaLabel) ?? `选择第 ${index + 1} 张${meta.ariaLabel}`)
                   : onRemove
                     ? `移除第 ${index + 1} 张${meta.ariaLabel}`
-                    : meta.ariaLabel
+                    : faceDown
+                      ? '牌背'
+                      : meta.ariaLabel
               }
               className={isSelected ? 'mj-tile--winning' : undefined}
               code={tile}
-              marker={isSelected ? selectionMarker : undefined}
+              faceDown={faceDown}
+              marker={isSelected ? selectionMarker : tileMarker?.(index, meta.ariaLabel)}
               onClick={handleTileClick ? () => handleTileClick(index) : undefined}
               selected={isSelected}
               size={tileSize}
             />
           );
         })}
-        {Array.from({ length: emptySlots }).map((_, index) => (
-          <span key={`empty-${index}`} aria-hidden="true" className={cx('mj-tile', `mj-tile--${tileSize}`, 'mj-tile--empty')} />
-        ))}
+        {Array.from({ length: emptySlots }).map((_, index) => {
+          const slotIndex = tiles.length + index;
+          const classNames = cx('mj-tile', `mj-tile--${tileSize}`, 'mj-tile--empty');
+          if (onEmptySlotClick) {
+            return (
+              <button
+                key={`empty-${index}`}
+                aria-label={emptySlotActionLabel?.(slotIndex) ?? `录入第 ${slotIndex + 1} 张牌`}
+                className={classNames}
+                disabled={emptySlotsDisabled}
+                type="button"
+                onClick={() => onEmptySlotClick(slotIndex)}
+              />
+            );
+          }
+          return <span key={`empty-${index}`} aria-hidden="true" className={classNames} />;
+        })}
       </div>
+    </div>
+  );
+}
+
+export interface QuickTileAction {
+  id: string;
+  label: string;
+  tiles: string[];
+  meldKind?: MeldTileGroupKind;
+  calledTileIndex?: number | null;
+  disabled?: boolean;
+}
+
+interface QuickTilePickerState {
+  tile: string;
+  actions: QuickTileAction[];
+  activeIndex: number | null;
+  pointerId: number | null;
+  anchorX: number;
+  bottom: number;
+}
+
+type QuickTilePickerStyle = CSSProperties & { '--mj-quick-picker-bottom': string };
+
+interface QuickTilePickerProps {
+  id: string;
+  pickerRef: RefObject<HTMLDivElement>;
+  state: QuickTilePickerState | null;
+}
+
+function QuickTilePicker({ id, pickerRef, state }: QuickTilePickerProps) {
+  const actions = state?.actions;
+  const anchorX = state?.anchorX;
+
+  useLayoutEffect(() => {
+    const picker = pickerRef.current;
+    if (!picker || anchorX === undefined) return;
+
+    const placeAboveAnchor = () => {
+      const viewportWidth = document.documentElement.clientWidth || window.innerWidth;
+      const pickerWidth = picker.getBoundingClientRect().width;
+      const safeInset = 6;
+      const minimumLeft = safeInset + pickerWidth / 2;
+      const maximumLeft = viewportWidth - safeInset - pickerWidth / 2;
+      const left =
+        minimumLeft <= maximumLeft
+          ? Math.min(maximumLeft, Math.max(minimumLeft, anchorX))
+          : viewportWidth / 2;
+      picker.style.setProperty('--mj-quick-picker-left', `${left}px`);
+    };
+
+    placeAboveAnchor();
+    window.addEventListener('resize', placeAboveAnchor);
+    return () => window.removeEventListener('resize', placeAboveAnchor);
+  }, [actions, anchorX, pickerRef]);
+
+  if (!state) return null;
+
+  const tileLabel = tileCodeToMeta(state.tile).ariaLabel;
+  const style: QuickTilePickerStyle = {
+    '--mj-quick-picker-bottom': `${state.bottom}px`,
+  };
+
+  return (
+    <div
+      ref={pickerRef}
+      aria-label={`${tileLabel}的组合选择`}
+      className="mj-quick-tile-picker"
+      id={id}
+      role="listbox"
+      style={style}
+    >
+      {state.actions.map((action, index) => {
+        const tileLabels = action.tiles.map((tile) => tileCodeToMeta(tile).ariaLabel).join('、');
+        return (
+          <div
+            key={action.id}
+            aria-label={`${action.label}：${tileLabels}`}
+            aria-selected={state.activeIndex === index}
+            className={cx(
+              'mj-quick-tile-picker__option',
+              state.activeIndex === index && 'mj-quick-tile-picker__option--active',
+            )}
+            data-quick-action-index={index}
+            role="option"
+          >
+            {action.meldKind ? (
+              <MeldTileGroup
+                ariaHidden
+                calledTileIndex={action.calledTileIndex}
+                kind={action.meldKind}
+                size="xs"
+                tiles={action.tiles}
+              />
+            ) : (
+              action.tiles.map((tile, tileIndex) => (
+                <MahjongTile
+                  key={`${action.id}-${tile}-${tileIndex}`}
+                  aria-hidden="true"
+                  code={tile}
+                  size="xs"
+                />
+              ))
+            )}
+          </div>
+        );
+      })}
+      <span aria-live="polite" className="mj-visually-hidden">
+        {state.actions.length} 个组合可选：{state.actions.map((action) => action.label).join('、')}
+      </span>
     </div>
   );
 }
@@ -839,7 +1114,7 @@ function buildTileGrid(suit: TileSuitId, allowRedFives: boolean) {
     return ranks;
   }
 
-  return [...ranks.slice(0, 5), `${suit}5r`, ...ranks.slice(5)];
+  return [...ranks, `${suit}5r`];
 }
 
 export interface TileKeyboardProps {
@@ -854,11 +1129,23 @@ export interface TileKeyboardProps {
   previewLabel?: ReactNode;
   previewHighlightLast?: boolean;
   previewHighlightIndex?: number | null;
+  previewReadOnly?: boolean;
+  previewMeldKind?: MeldTileGroupKind | null;
+  previewMeldCalledTileIndex?: number | null;
+  replaceTilesOnInput?: boolean;
+  quickActionOnly?: boolean;
   onPreviewTileSelect?: (index: number) => void;
   doneLabel?: ReactNode;
+  doneDisabled?: boolean;
   allowRedFives?: boolean;
   suits?: TileSuitDefinition[];
   isTileDisabled?: (tile: string, currentTiles: string[]) => boolean;
+  getQuickActions?: (tile: string, currentTiles: string[]) => QuickTileAction[];
+  onQuickAction?: (action: QuickTileAction, tile: string) => void;
+  onDelete?: (index: number) => void;
+  deleteLabel?: ReactNode;
+  onClear?: () => void;
+  showClearAction?: boolean;
 }
 
 export function TileKeyboard({
@@ -873,18 +1160,36 @@ export function TileKeyboard({
   previewLabel = '手牌预览',
   previewHighlightLast = true,
   previewHighlightIndex,
+  previewReadOnly = false,
+  previewMeldKind,
+  previewMeldCalledTileIndex,
+  replaceTilesOnInput = false,
+  quickActionOnly = false,
   onPreviewTileSelect,
   doneLabel = '完成',
+  doneDisabled = false,
   allowRedFives = true,
   suits = defaultTileSuits,
   isTileDisabled,
+  getQuickActions,
+  onQuickAction,
+  onDelete,
+  deleteLabel = '删除',
+  onClear,
+  showClearAction = true,
 }: TileKeyboardProps) {
   const titleId = useId();
+  const quickPickerId = useId();
   const dialogRef = useRef<HTMLElement>(null);
+  const quickPickerRef = useRef<HTMLDivElement>(null);
+  const quickPickerStateRef = useRef<QuickTilePickerState | null>(null);
+  const quickPointerCleanupRef = useRef<(() => void) | null>(null);
+  const suppressTileClickRef = useRef(false);
   const [activeSuit, setActiveSuit] = useState<TileSuitId>(suits[0]?.id ?? 'm');
+  const [quickPickerState, setQuickPickerState] = useState<QuickTilePickerState | null>(null);
   const currentSuit = suits.some((suit) => suit.id === activeSuit) ? activeSuit : suits[0]?.id ?? 'm';
   const gridTiles = useMemo(() => buildTileGrid(currentSuit, allowRedFives), [allowRedFives, currentSuit]);
-  const atLimit = tiles.length >= maxTiles;
+  const atLimit = !replaceTilesOnInput && tiles.length >= maxTiles;
 
   useEffect(() => {
     if (!open) return;
@@ -939,6 +1244,21 @@ export function TileKeyboard({
     };
   }, [onClose, open]);
 
+  useEffect(() => {
+    if (open) return;
+    quickPointerCleanupRef.current?.();
+    quickPointerCleanupRef.current = null;
+    quickPickerStateRef.current = null;
+    setQuickPickerState(null);
+  }, [open]);
+
+  useEffect(
+    () => () => {
+      quickPointerCleanupRef.current?.();
+    },
+    [],
+  );
+
   if (!open) {
     return null;
   }
@@ -947,10 +1267,165 @@ export function TileKeyboard({
   const dialogLabelProps = title ? { 'aria-labelledby': titleId } : { 'aria-label': '牌面键盘' };
 
   const addTile = (tile: string) => {
-    if (tiles.length >= maxTiles || isTileDisabled?.(tile, tiles)) {
+    if ((!replaceTilesOnInput && tiles.length >= maxTiles) || isTileDisabled?.(tile, tiles)) {
       return;
     }
-    onChange([...tiles, tile]);
+    onChange(replaceTilesOnInput ? [tile] : [...tiles, tile]);
+  };
+
+  const updateQuickPicker = (state: QuickTilePickerState | null) => {
+    quickPickerStateRef.current = state;
+    setQuickPickerState(state);
+  };
+
+  const clearQuickPointerListeners = () => {
+    quickPointerCleanupRef.current?.();
+    quickPointerCleanupRef.current = null;
+  };
+
+  const closeQuickPicker = () => {
+    clearQuickPointerListeners();
+    updateQuickPicker(null);
+  };
+
+  const openQuickPicker = (
+    tile: string,
+    actions: QuickTileAction[],
+    trigger: HTMLElement,
+    pointerId: number | null,
+    activeIndex: number | null,
+  ) => {
+    const rect = trigger.getBoundingClientRect();
+    updateQuickPicker({
+      tile,
+      actions,
+      activeIndex,
+      pointerId,
+      anchorX: rect.left + rect.width / 2,
+      bottom: Math.max(8, window.innerHeight - rect.top + 8),
+    });
+  };
+
+  const getQuickActionIndexAtPoint = (clientX: number, clientY: number) => {
+    const options = quickPickerRef.current?.querySelectorAll<HTMLElement>('[data-quick-action-index]');
+    if (!options) return null;
+    for (const option of options) {
+      const rect = option.getBoundingClientRect();
+      const hitSlop = 6;
+      if (
+        clientX >= rect.left - hitSlop &&
+        clientX <= rect.right + hitSlop &&
+        clientY >= rect.top - hitSlop &&
+        clientY <= rect.bottom + hitSlop
+      ) {
+        return Number(option.dataset.quickActionIndex);
+      }
+    }
+    return null;
+  };
+
+  const updateQuickPickerActiveIndex = (activeIndex: number | null) => {
+    const current = quickPickerStateRef.current;
+    if (!current || current.activeIndex === activeIndex) return;
+    updateQuickPicker({ ...current, activeIndex });
+  };
+
+  const suppressNextTileClick = () => {
+    suppressTileClickRef.current = true;
+    window.setTimeout(() => {
+      suppressTileClickRef.current = false;
+    }, 0);
+  };
+
+  const handleTileClick = (tile: string) => {
+    if (suppressTileClickRef.current) {
+      suppressTileClickRef.current = false;
+      return;
+    }
+    if (quickActionOnly) return;
+    addTile(tile);
+  };
+
+  const handleQuickPointerDown = (
+    event: ReactPointerEvent<HTMLSpanElement>,
+    tile: string,
+    actions: QuickTileAction[],
+  ) => {
+    if (!event.isPrimary || event.button !== 0 || !onQuickAction || actions.length === 0) return;
+    event.preventDefault();
+    clearQuickPointerListeners();
+    openQuickPicker(tile, actions, event.currentTarget, event.pointerId, null);
+
+    const pointerId = event.pointerId;
+    const handlePointerMove = (pointerEvent: PointerEvent) => {
+      const current = quickPickerStateRef.current;
+      if (!current || current.pointerId !== pointerId || pointerEvent.pointerId !== pointerId) return;
+      if (pointerEvent.cancelable) pointerEvent.preventDefault();
+      updateQuickPickerActiveIndex(getQuickActionIndexAtPoint(pointerEvent.clientX, pointerEvent.clientY));
+    };
+    const handlePointerUp = (pointerEvent: PointerEvent) => {
+      const current = quickPickerStateRef.current;
+      if (!current || current.pointerId !== pointerId || pointerEvent.pointerId !== pointerId) return;
+      if (pointerEvent.cancelable) pointerEvent.preventDefault();
+      const activeIndex = getQuickActionIndexAtPoint(pointerEvent.clientX, pointerEvent.clientY);
+      suppressNextTileClick();
+      clearQuickPointerListeners();
+      if (activeIndex === null) {
+        if (!quickActionOnly) addTile(current.tile);
+      }
+      else onQuickAction(current.actions[activeIndex], current.tile);
+      updateQuickPicker(null);
+    };
+    const handlePointerCancel = (pointerEvent: PointerEvent) => {
+      const current = quickPickerStateRef.current;
+      if (!current || current.pointerId !== pointerId || pointerEvent.pointerId !== pointerId) return;
+      suppressNextTileClick();
+      clearQuickPointerListeners();
+      updateQuickPicker(null);
+    };
+
+    window.addEventListener('pointermove', handlePointerMove, { passive: false });
+    window.addEventListener('pointerup', handlePointerUp);
+    window.addEventListener('pointercancel', handlePointerCancel);
+    quickPointerCleanupRef.current = () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+      window.removeEventListener('pointercancel', handlePointerCancel);
+    };
+  };
+
+  const handleQuickKeyDown = (
+    event: ReactKeyboardEvent<HTMLSpanElement>,
+    tile: string,
+    actions: QuickTileAction[],
+  ) => {
+    const current = quickPickerStateRef.current;
+    if (current?.tile === tile && current.pointerId === null) {
+      if (event.key === 'Escape' || event.key === 'ArrowDown') {
+        event.preventDefault();
+        event.stopPropagation();
+        closeQuickPicker();
+        return;
+      }
+      if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+        event.preventDefault();
+        const direction = event.key === 'ArrowRight' ? 1 : -1;
+        const activeIndex = current.activeIndex ?? 0;
+        updateQuickPickerActiveIndex((activeIndex + direction + current.actions.length) % current.actions.length);
+        return;
+      }
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        const activeIndex = current.activeIndex ?? 0;
+        onQuickAction?.(current.actions[activeIndex], tile);
+        closeQuickPicker();
+        return;
+      }
+    }
+
+    if (event.key !== 'ArrowUp' || !onQuickAction || actions.length === 0) return;
+    event.preventDefault();
+    openQuickPicker(tile, actions, event.currentTarget, null, 0);
   };
 
   const deleteIndex =
@@ -959,7 +1434,19 @@ export function TileKeyboard({
       : tiles.length - 1;
   const deleteSelectedTile = () => {
     if (deleteIndex < 0) return;
+    if (onDelete) {
+      onDelete(deleteIndex);
+      return;
+    }
     onChange(tiles.filter((_, currentIndex) => currentIndex !== deleteIndex));
+  };
+
+  const clearTiles = () => {
+    if (onClear) {
+      onClear();
+      return;
+    }
+    onChange([]);
   };
 
   return (
@@ -990,30 +1477,51 @@ export function TileKeyboard({
           </div>
         ) : null}
 
-        <TileStrip
-          className="mj-keyboard-preview-strip"
-          emptyLabel={null}
-          highlightIndex={previewHighlightIndex}
-          highlightLast={previewHighlightLast}
-          label={
-            <span>
-              {previewLabel}
-              <strong>
-                {tiles.length}/{maxTiles}
-              </strong>
-            </span>
-          }
-          maxSlots={Math.min(maxTiles, 14)}
-          tiles={tiles}
-          tileActionLabel={(index, tileLabel) => `选择第 ${index + 1} 张${tileLabel}为和牌`}
-          tileSize="xs"
-          onRemove={
-            onPreviewTileSelect
-              ? undefined
-              : (index) => onChange(tiles.filter((_, currentIndex) => currentIndex !== index))
-          }
-          onTileClick={onPreviewTileSelect}
-        />
+        {previewMeldKind ? (
+          <div className="mj-tile-strip mj-keyboard-preview-strip">
+            <div className="mj-tile-strip__label">
+              <span>
+                {previewLabel}
+                <strong>
+                  {tiles.length}/{maxTiles}
+                </strong>
+              </span>
+            </div>
+            <div className="mj-keyboard-preview-strip__meld-row">
+              <MeldTileGroup
+                calledTileIndex={previewMeldCalledTileIndex}
+                kind={previewMeldKind}
+                size="xs"
+                tiles={tiles}
+              />
+            </div>
+          </div>
+        ) : (
+          <TileStrip
+            className="mj-keyboard-preview-strip"
+            emptyLabel={null}
+            highlightIndex={previewHighlightIndex}
+            highlightLast={previewHighlightLast}
+            label={
+              <span>
+                {previewLabel}
+                <strong>
+                  {tiles.length}/{maxTiles}
+                </strong>
+              </span>
+            }
+            maxSlots={Math.min(maxTiles, 14)}
+            tiles={tiles}
+            tileActionLabel={(index, tileLabel) => `选择第 ${index + 1} 张${tileLabel}为和牌`}
+            tileSize="xs"
+            onRemove={
+              onPreviewTileSelect || previewReadOnly
+                ? undefined
+                : (index) => onChange(tiles.filter((_, currentIndex) => currentIndex !== index))
+            }
+            onTileClick={onPreviewTileSelect}
+          />
+        )}
 
         <div aria-label="选择花色" className="mj-suit-tabs" role="group">
           {suits.map((suit) => (
@@ -1022,7 +1530,10 @@ export function TileKeyboard({
               aria-pressed={suit.id === currentSuit}
               className={cx('mj-suit-tabs__item', suit.id === currentSuit && 'mj-suit-tabs__item--selected')}
               type="button"
-              onClick={() => setActiveSuit(suit.id)}
+              onClick={() => {
+                closeQuickPicker();
+                setActiveSuit(suit.id);
+              }}
             >
               {suit.label}
             </button>
@@ -1032,43 +1543,68 @@ export function TileKeyboard({
         <div aria-label="牌面选择" className="mj-tile-keyboard__grid">
           {gridTiles.map((tile) => {
             const meta = tileCodeToMeta(tile);
-            const disabled = atLimit || Boolean(isTileDisabled?.(tile, tiles));
+            const inputDisabled = atLimit || Boolean(isTileDisabled?.(tile, tiles));
+            const availableQuickActions =
+              getQuickActions && onQuickAction && !inputDisabled
+                ? getQuickActions(tile, tiles).filter((action) => !action.disabled)
+                : [];
+            const disabled = inputDisabled || (quickActionOnly && availableQuickActions.length === 0);
+            const quickSelectEnabled = availableQuickActions.length > 0;
+            const quickPickerOpen = quickPickerState?.tile === tile;
             return (
               <MahjongTile
                 key={tile}
-                ariaLabel={`加入${meta.ariaLabel}`}
+                aria-controls={quickPickerOpen ? quickPickerId : undefined}
+                aria-expanded={quickSelectEnabled ? quickPickerOpen : undefined}
+                aria-haspopup={quickSelectEnabled ? 'listbox' : undefined}
+                ariaLabel={
+                  quickSelectEnabled
+                    ? `加入${meta.ariaLabel}，按住并上滑或按上方向键选择组合`
+                    : `加入${meta.ariaLabel}`
+                }
+                className={quickSelectEnabled ? 'mj-tile--quick-enabled' : undefined}
                 code={tile}
                 disabled={disabled}
-                onClick={() => addTile(tile)}
+                onBlur={() => {
+                  const current = quickPickerStateRef.current;
+                  if (current?.tile === tile && current.pointerId === null) closeQuickPicker();
+                }}
+                onClick={() => handleTileClick(tile)}
+                onContextMenu={(event) => event.preventDefault()}
+                onKeyDown={(event) => handleQuickKeyDown(event, tile, availableQuickActions)}
+                onPointerDown={(event) => handleQuickPointerDown(event, tile, availableQuickActions)}
                 size="lg"
               />
             );
           })}
         </div>
 
-        <div className="mj-tile-keyboard__actions">
+        <div className={cx('mj-tile-keyboard__actions', !showClearAction && 'mj-tile-keyboard__actions--compact')}>
           <ActionButton
             disabled={tiles.length === 0}
             icon={<Trash2 aria-hidden="true" />}
             variant="ghost"
             onClick={deleteSelectedTile}
           >
-            删除
+            {deleteLabel}
           </ActionButton>
-          <ActionButton
-            className="mj-keyboard-clear-action"
-            disabled={tiles.length === 0}
-            icon={<RotateCcw aria-hidden="true" />}
-            variant="ghost"
-            onClick={() => onChange([])}
-          >
-            清空
-          </ActionButton>
-          <ActionButton fullWidth icon={<Check aria-hidden="true" />} onClick={onDone}>
+          {showClearAction ? (
+            <ActionButton
+              className="mj-keyboard-clear-action"
+              disabled={tiles.length === 0}
+              icon={<RotateCcw aria-hidden="true" />}
+              variant="ghost"
+              onClick={clearTiles}
+            >
+              清空
+            </ActionButton>
+          ) : null}
+          <ActionButton disabled={doneDisabled} fullWidth icon={<Check aria-hidden="true" />} onClick={onDone}>
             {doneLabel}
           </ActionButton>
         </div>
       </section>
+      <QuickTilePicker id={quickPickerId} pickerRef={quickPickerRef} state={quickPickerState} />
     </div>
   );
 }
@@ -1468,6 +2004,7 @@ export interface ShareAction {
   icon?: ReactNode;
   disabled?: boolean;
   ariaLabel?: string;
+  ariaPressed?: boolean;
   variant?: ButtonVariant;
 }
 
@@ -1492,6 +2029,7 @@ export function ShareBar({
           <ActionButton
             key={action.id}
             aria-label={action.ariaLabel}
+            aria-pressed={action.ariaPressed}
             disabled={action.disabled}
             icon={action.icon ?? defaultShareIcon(action.id)}
             size={size}

@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
+import { calculateHandEfficiency } from '../domain/efficiency';
 import { calculateScoreOrEfficiency } from '../domain/scoring';
 import { parseTileCodes, type TileCode } from '../domain/tiles';
-import { createMeldInput, DEFAULT_SCORE_CONDITIONS, type ScoreInput } from '../domain/validation';
+import {
+  createMeldInput,
+  DEFAULT_SCORE_CONDITIONS,
+  isValidEfficiencyTileCount,
+  type ScoreInput,
+} from '../domain/validation';
 
 function scoreInput(codes: TileCode[], overrides: Partial<ScoreInput> = {}): ScoreInput {
   const handTiles = parseTileCodes(codes);
@@ -46,6 +52,30 @@ describe('quick scoring engine', () => {
     expect(result.result.shanten).toBeGreaterThanOrEqual(0);
     expect(result.result.effective_tiles.length).toBeGreaterThan(0);
     expect(result.result.warnings.length).toBeGreaterThan(0);
+  });
+
+  it.each([0, 1, 2, 3, 4])(
+    'only accepts draw and discard tile counts for %i melds',
+    (meldCount) => {
+      const completeTileCount = 14 - meldCount * 3;
+
+      expect(isValidEfficiencyTileCount(completeTileCount - 1, meldCount)).toBe(true);
+      expect(isValidEfficiencyTileCount(completeTileCount, meldCount)).toBe(true);
+      expect(isValidEfficiencyTileCount(completeTileCount - 2, meldCount)).toBe(false);
+      expect(isValidEfficiencyTileCount(completeTileCount + 1, meldCount)).toBe(false);
+    },
+  );
+
+  it('rejects efficiency requests whose tile count implies melds that were not entered', () => {
+    const handTiles = parseTileCodes(['m1', 'm2', 'm3', 'm4']);
+    const result = calculateScoreOrEfficiency(scoreInput(['m1', 'm2', 'm3', 'm4']));
+
+    expect(result.kind).toBe('invalid');
+    if (result.kind !== 'invalid') return;
+    expect(result.errors).toEqual([
+      '牌数与副露数量不匹配：0 组副露时，牌效计算需要 13 或 14 张闭合手牌，当前 4 张',
+    ]);
+    expect(() => calculateHandEfficiency({ mode: 'yonma', handTiles })).toThrow(RangeError);
   });
 
   it('uses two payer total gain for sanma tsumo-loss', () => {

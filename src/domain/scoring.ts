@@ -14,6 +14,8 @@ import {
 } from './points';
 import { countRedDora, type Tile, type Wind } from './tiles';
 import {
+  expectedClosedTileCount,
+  isValidEfficiencyTileCount,
   validateScoreInput,
   type ScoreInput,
   type ScoreMode,
@@ -283,6 +285,17 @@ export function calculateScoreOrEfficiency(
 ): ScoreComputation {
   const validation = validateScoreInput(input);
   if (!validation.ok) return { kind: 'invalid', errors: validation.errors, warnings: validation.warnings };
+
+  if (!isValidEfficiencyTileCount(input.handTiles.length, input.melds.length)) {
+    const completeTileCount = expectedClosedTileCount(input.melds.length);
+    return {
+      kind: 'invalid',
+      errors: [
+        `牌数与副露数量不匹配：${input.melds.length} 组副露时，牌效计算需要 ${completeTileCount - 1} 或 ${completeTileCount} 张闭合手牌，当前 ${input.handTiles.length} 张`,
+      ],
+      warnings: validation.warnings,
+    };
+  }
 
   if (input.handTiles.length + input.melds.length * 3 !== 14 || input.winTile === null) {
     return {

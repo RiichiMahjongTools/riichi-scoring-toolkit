@@ -78,10 +78,13 @@ export function AppScreen({ page, onNavigate, shareStatus = null }: AppScreenPro
     <div className="mj-app-navigation">
       {currentSection ? (
         <ModuleTabs
-          activeId={page}
+          activeId={page === 'legacy-score' ? 'quick-score' : page}
           ariaLabel={`${currentSection.label}功能`}
           items={currentSection.tabs.map((tab) => ({ id: tab.page, label: tab.label }))}
-          onSelect={onNavigate}
+          onSelect={(target) => {
+            if (page === 'legacy-score' && target === 'quick-score') return;
+            onNavigate(target);
+          }}
         />
       ) : (
         <TopNav title={PAGE_TITLES[page]} onBack={navigateBack} />
@@ -111,7 +114,7 @@ export function AppScreen({ page, onNavigate, shareStatus = null }: AppScreenPro
 function renderPage(page: PageId, onNavigate: (page: PageId) => void) {
   switch (page) {
     case 'quick-score':
-      return <QuickScorePage />;
+      return <QuickScorePage onNavigate={onNavigate} />;
     case 'han-fu-calculator':
       return <HanFuCalculatorPage />;
     case 'han-fu-table':
@@ -133,7 +136,7 @@ function renderPage(page: PageId, onNavigate: (page: PageId) => void) {
     case 'contact':
       return <ContactPage />;
     case 'legacy-score':
-      return <LegacyScorePage />;
+      return <LegacyScorePage onNavigate={onNavigate} />;
     case 'table-records':
       return <TableRecordsPage />;
     case 'hand-recognition':

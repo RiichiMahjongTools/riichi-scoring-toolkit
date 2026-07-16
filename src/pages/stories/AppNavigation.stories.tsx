@@ -24,15 +24,18 @@ export const RemembersLastPagePerSection: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
 
-    await userEvent.click(canvas.getByRole('button', { name: '古役' }));
-    await expect(canvas.getByRole('button', { name: '古役' })).toHaveAttribute('aria-current', 'page');
+    await userEvent.click(canvas.getByRole('button', { name: '古役模式' }));
+    await expect(canvas.getByRole('button', { name: '古役模式' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(canvas.getByRole('button', { name: '快速算分' })).toHaveAttribute('aria-current', 'page');
+    await userEvent.click(canvas.getByRole('button', { name: '快速算分' }));
+    await expect(canvas.getByRole('button', { name: '古役模式' })).toHaveAttribute('aria-pressed', 'true');
 
     await userEvent.click(canvas.getByRole('button', { name: '练习' }));
     await expect(canvas.getByRole('button', { name: '符数' })).toHaveAttribute('aria-current', 'page');
     await userEvent.click(canvas.getByRole('button', { name: '清一色' }));
 
     await userEvent.click(canvas.getByRole('button', { name: '算分' }));
-    await expect(canvas.getByRole('button', { name: '古役' })).toHaveAttribute('aria-current', 'page');
+    await expect(canvas.getByRole('button', { name: '古役模式' })).toHaveAttribute('aria-pressed', 'true');
     await userEvent.click(canvas.getByRole('button', { name: '练习' }));
     await expect(canvas.getByRole('button', { name: '清一色' })).toHaveAttribute('aria-current', 'page');
     await assertFlatSurfaceHierarchy(canvasElement);

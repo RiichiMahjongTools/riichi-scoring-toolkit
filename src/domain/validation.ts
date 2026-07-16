@@ -169,6 +169,20 @@ export function expectedClosedTileCount(meldCount: number): number {
   return 14 - meldCount * 3;
 }
 
+export function isValidEfficiencyTileCount(handTileCount: number, meldCount: number): boolean {
+  if (
+    !Number.isInteger(handTileCount) ||
+    !Number.isInteger(meldCount) ||
+    meldCount < 0 ||
+    meldCount > 4
+  ) {
+    return false;
+  }
+
+  const completeTileCount = expectedClosedTileCount(meldCount);
+  return handTileCount === completeTileCount - 1 || handTileCount === completeTileCount;
+}
+
 export function isCompleteHandTileCount(input: ScoreInput): boolean {
   return input.handTiles.length + input.melds.length * 3 === 14;
 }
